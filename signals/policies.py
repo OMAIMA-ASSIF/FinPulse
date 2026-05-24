@@ -132,3 +132,19 @@ CONVERGENCE_TRIPLET = {
     "boost_weak": 0.0,        # 1/3 signaux
     "min_confidence_for_boost": 0.4,
 }
+
+# ── Fenêtre temporelle pour la convergence triplet ──
+# Les 3 signaux (RLDS, GCE, ITA) doivent avoir été calculés
+# dans un intervalle ≤ 72h pour activer le boost.
+CONVERGENCE_TEMPORAL_WINDOW_HOURS = 72
+
+# ── Mapping explicite des sources des 3 signaux ──
+# RLDS  → text_signals (Risk Lexical Drift Score)
+# GCE   → forward_pessimism (Guidance Confidence Erosion)
+# ITA   → behavior_signals (Insider Transaction Asymmetry)
+TRIPLET_SIGNAL_SOURCES = {
+    "rlds": {"source_module": "text_signals", "description": "Risk Lexical Drift Score"},
+    "gce": {"source_module": "text_signals", "signal_name": "forward_pessimism", "description": "Guidance Confidence Erosion"},
+    "ita": {"source_module": "behavior_signals", "signal_name": "insider_signal", "description": "Insider Transaction Asymmetry"},
+}
+

@@ -21,11 +21,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 import pickle
 import os
 from pathlib import Path
-from typing import Dict, Tuple, Optional, List
+from typing import Any, Dict, Tuple, Optional, List
 import logging
 from contextlib import contextmanager
 
@@ -49,13 +50,44 @@ AUTOENCODER_BATCH_SIZE = 32
 AUTOENCODER_WEIGHT_DECAY = 1e-5               # Régularisation L2
 
 # Seuils et normalisation
-AUTOENCODER_ANOMALY_THRESHOLD_PERCENTILE = 95  # Top 5% = anomalies
+ANOMALY_K_SIGMA = 2.0                          # Seuil = mean + k * std (k=2)
 MIN_SAMPLES_FOR_TRAINING = 100                 # Minimum embeddings par secteur
 BACKFILL_DAYS = 365                            # Données des 12 derniers mois
 
 # Stockage des modèles
 MODELS_DIR = Path("data/autoencoder_models")
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================================
+# OBJET SuspectParagraph — transmis au pipeline en aval
+# ============================================================================
+
+@dataclass
+class SuspectParagraph:
+    """
+    Représente un paragraphe détecté comme anormal par l'autoencoder.
+
+    Transmis au pipeline d'explicabilité et au Sentinel.
+    Chaque embedding scoré produit un SuspectParagraph.
+    """
+    embedding_id: int
+    filing_id: int
+    company_id: int
+    sector_code: str
+    chunk_text: str                               # Texte du chunk d'origine
+    section_name: str                             # Section du filing (ex: risk_factors)
+    reconstruction_error: float                   # MSE brut entre input et reconstruction
+    anomaly_score: float                          # Score normalisé ∈ [0, 1]
+    threshold: float                              # Seuil dynamique du secteur (mean + k*std)
+    is_anomalous: bool                            # True si reconstruction_error > threshold
+    computed_at: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Sérialisation pour stockage JSON ou transmission API."""
+        d = asdict(self)
+        d["computed_at"] = self.computed_at.isoformat()
+        return d
 
 
 # ============================================================================
@@ -267,19 +299,22 @@ class SectorAutoencoderManager:
                     f"val_loss={val_loss:.4f}"
                 )
         
-        # Calculer le seuil d'anomalie
+        # Calculer le seuil d'anomalie : mean + k * std
         model.eval()
         with torch.no_grad():
             train_output = model(train_tensor)
             mse_scores = torch.mean((train_output - train_tensor) ** 2, dim=1)
             mse_numpy = mse_scores.cpu().numpy()
-            threshold = float(np.percentile(mse_numpy, AUTOENCODER_ANOMALY_THRESHOLD_PERCENTILE))
+            mse_mean = float(np.mean(mse_numpy))
+            mse_std = float(np.std(mse_numpy))
+            threshold = mse_mean + ANOMALY_K_SIGMA * mse_std
         
         logger.info(
             f"Sector {sector_code}: Training complete\n"
             f"  Final train loss: {train_losses[-1]:.4f}\n"
             f"  Final val loss: {val_losses[-1]:.4f}\n"
-            f"  Anomaly threshold (95th percentile): {threshold:.4f}"
+            f"  MSE mean: {mse_mean:.4f}, std: {mse_std:.4f}\n"
+            f"  Anomaly threshold (mean + {ANOMALY_K_SIGMA}*std): {threshold:.4f}"
         )
         
         return model, threshold
@@ -395,7 +430,9 @@ def validate_embedding_batch(embeddings: np.ndarray) -> dict:
 # 4. FONCTION PUBLIQUE: SCORER LES EMBEDDINGS
 # ============================================================================
 
-def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = True):
+def compute_embeddings_anomaly_scores(
+    session, filing_id: int, commit: bool = True
+) -> List[SuspectParagraph]:
     """
     Calculer les anomaly scores pour tous les embeddings d'un filing.
     
@@ -405,28 +442,34 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
     3. Calculer MSE(input, reconstruction)
     4. Normaliser MSE en anomaly_score ∈ [0, 1]
     5. Mettre à jour la BD
+    6. Retourner les SuspectParagraph pour le pipeline aval
     
     Args:
         session: SQLAlchemy session
         filing_id: ID du filing à traiter
         commit: Si True, commite les changements en BD
         
+    Returns:
+        Liste de SuspectParagraph (un par embedding scoré)
+        
     Example:
         >>> from app.db import SessionLocal
         >>> session = SessionLocal()
-        >>> compute_embeddings_anomaly_scores(session, filing_id=12345)
-        >>> # BD mise à jour avec reconstruction_error et anomaly_score
+        >>> suspects = compute_embeddings_anomaly_scores(session, filing_id=12345)
+        >>> anomalous = [s for s in suspects if s.is_anomalous]
     """
 
     from app.db.models import Embedding, Filing, Company
+    from app.db.models.filing_section import FilingSection
     
     manager = SectorAutoencoderManager()
+    suspect_paragraphs: List[SuspectParagraph] = []
     
     # Charger le filing et ses embeddings
     filing = session.query(Filing).get(filing_id)
     if not filing:
         logger.error(f"Filing {filing_id} not found")
-        return
+        return suspect_paragraphs
     
     embeddings = session.query(Embedding).filter(
         Embedding.filing_id == filing_id
@@ -434,13 +477,13 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
     
     if not embeddings:
         logger.warning(f"No embeddings found for filing {filing_id}")
-        return
+        return suspect_paragraphs
     
     logger.info(
         f"Processing filing {filing_id} ({filing.company.name}): "
         f"{len(embeddings)} embeddings"
     )
-    # ── NOUVEAU: extraire les arrays AVANT la garde ──────────────────────────
+    # ── Extraire les arrays AVANT la garde ────────────────────────────────
     embedding_arrays = np.array([
         np.array(e.embedding, dtype=np.float32) for e in embeddings
     ])
@@ -456,20 +499,23 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
             f"Filing {filing_id}: seulement {report['coverage_ratio']:.0%} "
             f"embeddings valides — scoring annulé"
         )
-        return
+        return suspect_paragraphs
     
     # Filtrer: ORM objects + arrays alignés sur le même masque
     valid_mask = report["valid_mask"]
     embeddings       = [e for e, m in zip(embeddings, valid_mask) if m]
     embedding_arrays = embedding_arrays[valid_mask]
-    # ── FIN NOUVEAU ──────────────────────────────────────────────────────────
+    # ── FIN filtrage ──────────────────────────────────────────────────────
     
-    sector_code = filing.company.sic_code
+    sector_code = filing.company.sic_code or "unknown"
     model, threshold = manager.load_model(sector_code)
     
     if model is None:
         logger.warning(f"No trained model for sector {sector_code}, skipping")
-        return
+        return suspect_paragraphs
+    
+    # Pré-charger les sections pour récupérer le nom de section
+    section_cache: Dict[int, str] = {}
     
     # Calculer les scores
     updated_count = 0
@@ -493,10 +539,30 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
         else:
             anomaly_score = 0.0
         
-        # Mettre à jour
+        # Mettre à jour la BD
         embedding.reconstruction_error = mse
         embedding.anomaly_score = anomaly_score
         updated_count += 1
+        
+        # Résoudre le nom de la section
+        section_id = embedding.filing_section_id
+        if section_id not in section_cache:
+            section = session.query(FilingSection).get(section_id)
+            section_cache[section_id] = section.section if section else "unknown"
+        
+        # Construire le SuspectParagraph
+        suspect_paragraphs.append(SuspectParagraph(
+            embedding_id=embedding.id,
+            filing_id=filing_id,
+            company_id=filing.company_id,
+            sector_code=sector_code,
+            chunk_text=embedding.text[:500] if embedding.text else "",
+            section_name=section_cache[section_id],
+            reconstruction_error=mse,
+            anomaly_score=anomaly_score,
+            threshold=threshold,
+            is_anomalous=(mse > threshold),
+        ))
     
     # Commit
     if commit:
@@ -504,6 +570,7 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
         logger.info(f"✅ Updated {updated_count} embeddings")
     
     # Stats
+    anomalous_count = sum(1 for sp in suspect_paragraphs if sp.is_anomalous)
     if mse_scores:
         logger.info(
             f"Anomaly score stats:\n"
@@ -511,8 +578,11 @@ def compute_embeddings_anomaly_scores(session, filing_id: int, commit: bool = Tr
             f"  Max: {max(mse_scores):.4f}\n"
             f"  Mean: {np.mean(mse_scores):.4f}\n"
             f"  Std: {np.std(mse_scores):.4f}\n"
-            f"  Threshold: {threshold:.4f}"
+            f"  Threshold (mean+{ANOMALY_K_SIGMA}*std): {threshold:.4f}\n"
+            f"  Anomalous: {anomalous_count}/{len(suspect_paragraphs)}"
         )
+    
+    return suspect_paragraphs
 
 
 # ============================================================================

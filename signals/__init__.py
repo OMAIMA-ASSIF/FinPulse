@@ -11,6 +11,11 @@ from signals.composite_engine import (
     compute_composite_signals,
 )
 from signals.composite_repo import load_signal_rows_by_name, load_signal_values_by_name
+from signals.explainability_client import (
+    ExplicabilityEngine,
+    Explanation,
+    SectorProfile,
+)
 from signals.history import get_previous_comparable_filing, load_comparable_filing_history
 from signals.nci_repo import upsert_nci_score
 from signals.numeric_features import (
@@ -28,6 +33,12 @@ from signals.numeric_signals import (
     NUMERIC_SIGNAL_MODEL_VERSION,
     compute_and_store_numeric_signals,
     compute_numeric_signals,
+)
+from signals.sector_autoencoder import SuspectParagraph
+from signals.sentinel import (
+    ScoreQuality,
+    SentinelAlert,
+    SentinelMonitor,
 )
 from signals.sentiment_signals import (
     SENTIMENT_SIGNAL_MODEL_VERSION,
@@ -48,12 +59,19 @@ __all__ = [
     "CANONICAL_FACT_ALIASES",
     "COMPOSITE_SIGNAL_MODEL_VERSION",
     "DEFAULT_SIGNAL_MODEL_VERSION",
+    "ExplicabilityEngine",
+    "Explanation",
     "MARKET_SIGNAL_MODEL_VERSION",
     "NUMERIC_FEATURES_VERSION",
     "NUMERIC_SIGNAL_MODEL_VERSION",
     "SENTIMENT_SIGNAL_MODEL_VERSION",
     "SIGNAL_DEFINITIONS",
+    "ScoreQuality",
+    "SectorProfile",
+    "SentinelAlert",
+    "SentinelMonitor",
     "SignalDefinition",
+    "SuspectParagraph",
     "build_period_metrics",
     "compute_and_store_behavior_signals",
     "compute_and_store_composite_signals",
@@ -79,3 +97,4 @@ __all__ = [
     "upsert_nci_score",
     "upsert_signal_scores",
 ]
+

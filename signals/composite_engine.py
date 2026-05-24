@@ -20,6 +20,7 @@ from signals.policies import (
     CARRY_FORWARD_LOOKBACK_FILINGS,
     CARRY_FORWARD_STALENESS_PENALTY,
     CONVERGENCE_THRESHOLDS,
+    CONVERGENCE_TEMPORAL_WINDOW_HOURS,
     CONVERGENCE_TIERS,
     CONVERGENCE_TRIPLET,
     NCI_COVERAGE_HIGH,
@@ -359,10 +360,25 @@ def _build_triplet_convergence_signal(
 ) -> ComputedCompositeSignal:
     """
     Surveille la convergence spécifique de 3 signaux clés:
-    RLDS (texte) + forward_pessimism (guidance) + insider_signal (insiders).
+    RLDS (texte) + GCE/forward_pessimism (guidance) + ITA/insider_signal (insiders).
 
-    Quand les 3 sont élevés en même temps → boost de risque maximal.
+    Logique AND avec fenêtre temporelle de 72h :
+    - Les 3 signaux doivent dépasser leurs seuils respectifs
+    - Les 3 doivent avoir été calculés dans un intervalle ≤ 72h
+
+    Formule du Convergence Boost :
+        Si 3/3 élevés → boost = 0.25 (boost_full)
+        Si 2/3 élevés → boost = 0.15 (boost_strong)
+        Si 1/3 élevés → boost = 0.0
+        Garde : boost = 0 si confiance globale < min_confidence_for_boost
+
+    Sources :
+        RLDS → signals.text_signals (Risk Lexical Drift Score, seuil: 0.25)
+        GCE  → signals.text_signals via forward_pessimism (Guidance Confidence Erosion, seuil: 0.25)
+        ITA  → signals.behavior_signals via insider_signal (Insider Transaction Asymmetry, seuil: 0.15)
     """
+    from datetime import timedelta
+
     definition = get_signal_definition("triplet_convergence_signal")
 
     # ── Extraire les 3 signaux ──
@@ -370,27 +386,43 @@ def _build_triplet_convergence_signal(
     forward_pessimism = signal_values.get("forward_pessimism")
     insider_signal = signal_values.get("insider_signal")
 
-    # ── Seuils ──
     # ── Seuils (depuis policies.py) ──
-    rlds_threshold             = CONVERGENCE_TRIPLET["rlds_threshold"]
+    rlds_threshold              = CONVERGENCE_TRIPLET["rlds_threshold"]
     forward_pessimism_threshold = CONVERGENCE_TRIPLET["forward_pessimism_threshold"]
-    insider_threshold          = CONVERGENCE_TRIPLET["ita_threshold"]
+    insider_threshold           = CONVERGENCE_TRIPLET["ita_threshold"]
 
     # ── Vérifier lesquels sont élevés ──
     rlds_elevated = rlds is not None and rlds >= rlds_threshold
     pessimism_elevated = forward_pessimism is not None and forward_pessimism >= forward_pessimism_threshold
     insider_elevated = insider_signal is not None and insider_signal >= insider_threshold
 
+    # ── Vérification de la fenêtre temporelle 72h ──
+    temporal_window = timedelta(hours=CONVERGENCE_TEMPORAL_WINDOW_HOURS)
+    signal_timestamps = signal_values.get("_signal_timestamps", {})
+    rlds_ts = signal_timestamps.get("rlds")
+    pessimism_ts = signal_timestamps.get("forward_pessimism")
+    insider_ts = signal_timestamps.get("insider_signal")
+
+    timestamps_available = [ts for ts in [rlds_ts, pessimism_ts, insider_ts] if ts is not None]
+    within_temporal_window = True
+    if len(timestamps_available) >= 2:
+        ts_min = min(timestamps_available)
+        ts_max = max(timestamps_available)
+        within_temporal_window = (ts_max - ts_min) <= temporal_window
+
     # ── Compter ──
     count = sum([rlds_elevated, pessimism_elevated, insider_elevated])
 
     # ── Calculer le boost ──
-    if count == 3:
+    if count == 3 and within_temporal_window:
         triplet_boost = CONVERGENCE_TRIPLET["boost_full"]
-        triplet_confidence = "full"  
-    elif count == 2:
+        triplet_confidence = "full"
+    elif count == 2 and within_temporal_window:
         triplet_boost = CONVERGENCE_TRIPLET["boost_strong"]
-        triplet_confidence = "strong"  
+        triplet_confidence = "strong"
+    elif count >= 2 and not within_temporal_window:
+        triplet_boost = 0.0
+        triplet_confidence = "blocked_temporal_window"
     elif count == 1:
         triplet_boost = 0.0
         triplet_confidence = "weak"
@@ -398,19 +430,21 @@ def _build_triplet_convergence_signal(
         triplet_boost = 0.0
         triplet_confidence = "none"
 
-    # ── Garde : ne pas booster si confiance globale trop faible ──  ← ICI
+    # ── Garde : ne pas booster si confiance globale trop faible ──
     min_confidence = CONVERGENCE_TRIPLET["min_confidence_for_boost"]
     overall_confidence = signal_values.get("_overall_confidence", 1.0)
     if overall_confidence < min_confidence and triplet_boost > 0:
         triplet_boost = 0.0
         triplet_confidence = "blocked_low_confidence"
-     # ── Interprétation (gère tous les cas) ──
+
+    # ── Interprétation (gère tous les cas) ──
     interpretation_map = {
         "full": "Convergence maximale: anomalie texte + pessimisme guidance + ventes insiders",
         "strong": "Convergence forte: 2 des 3 indicateurs présents",
         "weak": "Convergence faible: 1 seul indicateur présent",
         "none": "Aucune convergence: aucun indicateur élevé",
         "blocked_low_confidence": "Boost bloqué: confiance globale insuffisante",
+        "blocked_temporal_window": f"Boost bloqué: signaux hors fenêtre {CONVERGENCE_TEMPORAL_WINDOW_HOURS}h",
     }
 
     # ── Construire le résultat ──
@@ -422,30 +456,28 @@ def _build_triplet_convergence_signal(
         model_version=model_version,
         detail={
             "description": definition.description if definition else "Triplet convergence signal",
+            "convergence_boost_formula": "boost = f(count, temporal_window, confidence)",
             "signal_values": {
                 "rlds": rlds,
-                "forward_pessimism": forward_pessimism,
-                "insider_signal": insider_signal,
+                "forward_pessimism (GCE)": forward_pessimism,
+                "insider_signal (ITA)": insider_signal,
             },
             "thresholds": {
                 "rlds": rlds_threshold,
-                "forward_pessimism": forward_pessimism_threshold,
-                "insider_signal": insider_threshold,
+                "forward_pessimism (GCE)": forward_pessimism_threshold,
+                "insider_signal (ITA)": insider_threshold,
             },
             "elevated_status": {
                 "rlds": rlds_elevated,
-                "forward_pessimism": pessimism_elevated,
-                "insider_signal": insider_elevated,
+                "forward_pessimism (GCE)": pessimism_elevated,
+                "insider_signal (ITA)": insider_elevated,
             },
+            "temporal_window_hours": CONVERGENCE_TEMPORAL_WINDOW_HOURS,
+            "within_temporal_window": within_temporal_window,
             "triplet_signals_elevated": count,
             "triplet_confidence": triplet_confidence,
             "triplet_boost": triplet_boost,
-            "interpretation": {
-                "full": "Convergence maximale: anomalie texte + pessimisme guidance + ventes insiders",
-                "strong": "Convergence forte: 2 des 3 indicateurs présents",
-                "weak": "Convergence faible: 1 seul indicateur présent",
-                "none": "Aucune convergence: aucun indicateur élevé",
-            }[triplet_confidence],
+            "interpretation": interpretation_map.get(triplet_confidence, "État inconnu"),
             "signal_category": "composite",
             "signal_role": "derived",
             "model_version": model_version,
