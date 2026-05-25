@@ -37,10 +37,17 @@ public class MultiAgentOrchestrator {
         // CASUAL + AUTO‑EXTRACTION
         if (ticker == null || ticker.isBlank()) {
             String extracted = extractTickerFromMessage(userMessage);
+            // Multiple companies mentioned
+            if ("MULTIPLE".equals(extracted)) {
+                return OrchestratorResult.clarification(
+                        "Vous avez mentionné plusieurs entreprises. Veuillez en choisir une seule pour que je puisse vous répondre précisément."
+                );
+            }
+
             if (extracted != null) {
                 ticker = extracted;
                 log.info("Ticker extracted from message: {}", ticker);
-                // Continue to financial flow below (do not return)
+                // Continue to financial flow below
             } else {
                 // No ticker in message → casual conversation
                 return OrchestratorResult.chatResponse(handleCasualChat(user, userMessage));
@@ -215,44 +222,54 @@ public class MultiAgentOrchestrator {
      * Returns the uppercase ticker symbol, or null if none is found.
      */
     private String extractTickerFromMessage(String message) {
-        // 1. LLM extraction
-        String llmTicker = null;
+        // 1. LLM extraction – now also detects MULTIPLE
+        String llmResult = null;
         try {
             String prompt = """
             You are a stock ticker extractor.
-            From the following user message, return ONLY the stock ticker symbol (uppercase, 1-5 letters).
-            If the user mentions a company name, convert it to the correct ticker.
-            If no company or ticker is mentioned, return exactly the word NONE.
+            From the following user message, return ONLY:
+            - a single stock ticker symbol (uppercase, 1-5 letters) if exactly one company is mentioned,
+            - the word "MULTIPLE" if more than one company is mentioned,
+            - the word "NONE" if no company or ticker is mentioned.
             Never return any other text.
-
+            
+            Examples:
+            "Tell me about Apple" → AAPL
+            "Compare Apple and Microsoft" → MULTIPLE
+            "Bonjour" → NONE
+            "donne moi le nci globale de SEMPRA" → SRE
+            
             Message: "%s"
             """.formatted(message);
 
             String response = chatClient.prompt().user(prompt).call().content();
             String cleaned = response.trim().toUpperCase().replaceAll("[^A-Z]", "");
+
+            if (cleaned.equals("MULTIPLE")) {
+                return "MULTIPLE";                 // <-- explicit multi‑company signal
+            }
             if (!cleaned.equals("NONE") && cleaned.length() >= 2 && cleaned.length() <= 5) {
-                llmTicker = cleaned;
+                llmResult = cleaned;
             }
         } catch (Exception e) {
             log.warn("LLM ticker extraction error", e);
         }
 
-        // 2. Validate with P1 API
-        if (llmTicker != null) {
+        // 2. P1 validation only for a single ticker candidate
+        if (llmResult != null) {
             try {
-                String companyName = ingestionPipelineService.getCompanyName(llmTicker);
+                String companyName = ingestionPipelineService.getCompanyName(llmResult);
                 if (companyName != null && !companyName.isBlank()) {
-                    // Optional: check if the user's message contains a word from the company name
-                    log.info("Ticker {} validated with P1 API (company: {})", llmTicker, companyName);
-                    return llmTicker;
+                    log.info("Ticker {} validated with P1 API (company: {})", llmResult, companyName);
+                    return llmResult;
                 }
             } catch (Exception e) {
-                log.warn("P1 validation failed for ticker {}", llmTicker);
+                log.warn("P1 validation failed for ticker {}", llmResult);
             }
         }
-        return null; // No valid ticker found
-    }
 
+        return null;   // no valid single ticker found
+    }
     /**
      * Handles casual conversation without any ticker.
      * Uses Mistral to generate a friendly, finance‑aware response.
