@@ -56,7 +56,7 @@ public class MultiAgentOrchestrator {
             }
             return OrchestratorResult.clarification(
                     "L'entreprise " + ticker + " n'est pas encore dans notre base. " +
-                            "Son ingestion est lancée. Veuillez réessayer dans quelques instants."
+                            "Son ingestion est lancée. Veuillez réessayer dans 15 minutes."
             );
         }
 
