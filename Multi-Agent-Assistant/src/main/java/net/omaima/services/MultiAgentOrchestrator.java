@@ -212,35 +212,43 @@ public class MultiAgentOrchestrator {
      * Returns the uppercase ticker symbol, or null if none is found.
      */
     private String extractTickerFromMessage(String message) {
+        // 1. LLM extraction
+        String llmTicker = null;
         try {
             String prompt = """
-            You are a stock ticker extractor. 
-            From the following user message, return ONLY the stock ticker symbol if one is mentioned.
-            If no ticker is mentioned, return exactly the word NONE.
-            Never return anything else – just the ticker or NONE.
-            
-            Examples:
-            "Tell me about Tesla" → TSLA
-            "Comment va Apple?" → AAPL
-            "What's the price of MSFT?" → MSFT
-            "Hello, how are you?" → NONE
-            
+            You are a stock ticker extractor.
+            From the following user message, return ONLY the stock ticker symbol (uppercase, 1-5 letters).
+            If the user mentions a company name, convert it to the correct ticker.
+            If no company or ticker is mentioned, return exactly the word NONE.
+            Never return any other text.
+
             Message: "%s"
             """.formatted(message);
 
             String response = chatClient.prompt().user(prompt).call().content();
             String cleaned = response.trim().toUpperCase().replaceAll("[^A-Z]", "");
-
-            if (cleaned.equals("NONE") || cleaned.length() < 2 || cleaned.length() > 5) {
-                return null;
+            if (!cleaned.equals("NONE") && cleaned.length() >= 2 && cleaned.length() <= 5) {
+                llmTicker = cleaned;
             }
-            return cleaned;
         } catch (Exception e) {
-            log.warn("Ticker extraction failed: {}", e.getMessage());
-            return null;
+            log.warn("LLM ticker extraction error", e);
         }
-    }
 
+        // 2. Validate with P1 API
+        if (llmTicker != null) {
+            try {
+                String companyName = ingestionPipelineService.getCompanyName(llmTicker);
+                if (companyName != null && !companyName.isBlank()) {
+                    // Optional: check if the user's message contains a word from the company name
+                    log.info("Ticker {} validated with P1 API (company: {})", llmTicker, companyName);
+                    return llmTicker;
+                }
+            } catch (Exception e) {
+                log.warn("P1 validation failed for ticker {}", llmTicker);
+            }
+        }
+        return null; // No valid ticker found
+    }
 
     /**
      * Handles casual conversation without any ticker.
