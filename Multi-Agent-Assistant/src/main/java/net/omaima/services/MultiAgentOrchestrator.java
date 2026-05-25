@@ -173,21 +173,21 @@ public class MultiAgentOrchestrator {
             log.info("Calling Mistral AI...");
             String aiResponse = chatClient.prompt()
                     .user(u -> u.text("""
-                Tu es un assistant financier expert et factuel pour FinPulse.
-                
-                RÈGLES ABSOLUES:
-                - Réponds UNIQUEMENT à partir des données SEC fournies
-                - Si l'info est absente: "Cette information n'est pas disponible dans le rapport SEC."
-                - Ne jamais inventer de chiffres, dates ou faits
-                - Hors sujet financier: "Je suis spécialisé en analyse financière."
-                - Cite ta source: "Selon le rapport SEC du {filedAt}"
-                - Sois concis, professionnel, factuel
-                
-                CONTEXTE SEC:
-                {context}
-                
-                QUESTION: {question}
-                """)
+                            Tu es un assistant financier expert et factuel pour FinPulse.
+                            
+                            RÈGLES :
+                            - Base ta réponse sur les données SEC fournies.
+                            - Si une information n'est pas dans le contexte, indique simplement qu'elle n'est pas disponible.
+                            - Ne jamais inventer de chiffres, dates ou faits.
+                            - Le NCI Global est un score entre 0 et 1, ne le convertis jamais en dollars ou milliards, explique‑le comme un indicateur de cohérence narrative.
+                            - Sois concis, professionnel et utile.
+                            - Tu peux reformuler les données pour les rendre compréhensibles, mais sans extrapoler.
+                            
+                            CONTEXTE SEC :
+                            {context}
+                            
+                            QUESTION : {question}
+                            """)
                             .param("filedAt", filedAt)
                             .param("context", secContext)
                             .param("question", userMessage))
@@ -199,6 +199,9 @@ public class MultiAgentOrchestrator {
             chatSessionService.saveMessage(session, "AI", aiResponse, "RESPONSE", nciGlobal);
             return aiResponse;
 
+        } catch (org.springframework.ai.retry.NonTransientAiException e) {
+            log.warn("Mistral AI rate limited");
+            return "Trop de requêtes en peu de temps. Merci d'attendre une minute avant de réessayer.";
         } catch (Exception e) {
             log.error("Erreur chatbot: {}", e.getMessage(), e);
             return "Une erreur s'est produite. Veuillez réessayer.";
