@@ -25,7 +25,7 @@ public class ChatController {
     private final MultiAgentOrchestrator orchestrator;
     private final JwtTokenProvider jwtTokenProvider;
 
-    record ChatRequest(String message, String ticker) {}
+    record ChatRequest(String message, String ticker, String conversationId) {}
 
     record ChatResponse(
             String  message,
@@ -51,7 +51,12 @@ public class ChatController {
 
             // Orchestre tout
             MultiAgentOrchestrator.OrchestratorResult result =
-                    orchestrator.handleMessage(user, request.ticker(), request.message());
+                    orchestrator.handleMessage(user, request.ticker(), request.message(), request.conversationId());
+
+            HttpHeaders headers = new HttpHeaders();
+            if (result.conversationId() != null) {
+                headers.add("X-Conversation-Id", result.conversationId());
+            }
 
             return switch (result.mode()) {
                 // Mode chatbot : simple réponse texte en JSON

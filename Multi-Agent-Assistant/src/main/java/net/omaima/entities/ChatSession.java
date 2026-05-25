@@ -40,4 +40,7 @@ public class ChatSession {
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ChatMessage> messages;
+
+    @Column(nullable = true)
+    private String conversationId;
 }

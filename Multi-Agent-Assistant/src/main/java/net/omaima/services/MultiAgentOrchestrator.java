@@ -3,6 +3,7 @@ package net.omaima.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.omaima.agent.*;
+import net.omaima.entities.ChatMessage;
 import net.omaima.entities.ChatSession;
 import net.omaima.entities.User;
 import org.springframework.ai.chat.client.ChatClient;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -30,31 +32,62 @@ public class MultiAgentOrchestrator {
     // =====================================================================
 
     @Transactional
-    public OrchestratorResult handleMessage(User user, String ticker, String userMessage) {
-        log.info("=== ORCHESTRATOR === user={} ticker={}", user.getUsername(), ticker);
+    public OrchestratorResult handleMessage(User user, String ticker, String userMessage, String conversationId) {
+        log.info("=== ORCHESTRATOR === user={} ticker={} conversationId={}", user.getUsername(), ticker, conversationId);
 
-        // Ticker manquant → demande de clarification immédiate
-        // CASUAL + AUTO‑EXTRACTION
-        if (ticker == null || ticker.isBlank()) {
-            String extracted = extractTickerFromMessage(userMessage);
-            // Multiple companies mentioned
-            if ("MULTIPLE".equals(extracted)) {
-                return OrchestratorResult.clarification(
-                        "Vous avez mentionné plusieurs entreprises. Veuillez en choisir une seule pour que je puisse vous répondre précisément."
-                );
-            }
+        // 1. Obtenir ou créer la session unique de la conversation
+        ChatSession session;
 
-            if (extracted != null) {
-                ticker = extracted;
-                log.info("Ticker extracted from message: {}", ticker);
-                // Continue to financial flow below
+        if (conversationId != null && !conversationId.isBlank()) {
+            session = chatSessionService.getOrCreateSession(user, conversationId);
+        } else {
+            // Fallback pour tests sans conversationId
+            Optional<ChatSession> active = chatSessionService.findActiveSessionByUser(user)
+                    .filter(s -> !"CASUAL".equals(s.getCompanyTicker()));
+            if (active.isPresent()) {
+                session = active.get();
+                log.info("Réutilisation de la session active (fallback test) id={}", session.getId());
             } else {
-                // No ticker in message → casual conversation
-                return OrchestratorResult.chatResponse(handleCasualChat(user, userMessage));
+                session = chatSessionService.getOrCreateSession(user, null);
             }
         }
 
-        // Entreprise inconnue → backfill
+        // 2. Déterminer le ticker effectif
+        if (ticker == null || ticker.isBlank()) {
+            // a. Extraction depuis le message
+            String extracted = extractTickerFromMessage(userMessage);
+
+            // b. Si toujours rien, chercher dans l'historique de la session
+            if (extracted == null) {
+                extracted = findTickerInSessionHistory(session);
+            }
+
+            // c. Plusieurs entreprises détectées
+            if ("MULTIPLE".equals(extracted)) {
+                return OrchestratorResult.clarification(
+                        "Vous avez mentionné plusieurs entreprises. Veuillez en choisir une seule.",
+                        session.getConversationId()
+                );
+            }
+
+            // d. Un ticker a été trouvé
+            if (extracted != null) {
+                ticker = extracted;
+                log.info("Ticker résolu : {}", ticker);
+            } else {
+                // Aucune entreprise → mode conversationnel
+                return OrchestratorResult.chatResponse(
+                        handleCasualChat(user, userMessage, session),
+                        session.getConversationId()
+                );
+            }
+        }
+
+        // 3. Mettre à jour le ticker courant de la session (optionnel, pratique pour l'affichage)
+        session.setCompanyTicker(ticker);
+        chatSessionService.save(session);
+
+        // 4. Vérifier si l'entreprise existe dans la base
         if (!checkIfCompanyExists(ticker)) {
             try {
                 ingestionPipelineService.triggerBackfillPipeline(ticker);
@@ -63,12 +96,13 @@ public class MultiAgentOrchestrator {
             }
             return OrchestratorResult.clarification(
                     "L'entreprise " + ticker + " n'est pas encore dans notre base. " +
-                            "Son ingestion est lancée. Veuillez réessayer dans 15 minutes."
+                            "Son ingestion est lancée. Veuillez réessayer dans 15 minutes.",
+                    session.getConversationId()
             );
         }
 
-        // Détection d'intention via LLM
-        IntentResult intent ;
+        // 5. Détection d'intention
+        IntentResult intent;
         try {
             intent = detectIntentWithLLM(userMessage, ticker);
         } catch (Exception e) {
@@ -77,19 +111,41 @@ public class MultiAgentOrchestrator {
         }
         log.info("Intent: {}", intent.mode());
 
+        // 6. Sauvegarder le message utilisateur dans l'historique de la session
+        chatSessionService.saveMessage(session, "USER", userMessage, intent.mode().toString(), null);
+
+        // 7. Router selon l'intention
         return switch (intent.mode()) {
             case OUT_OF_SCOPE -> OrchestratorResult.clarification(
                     "Je suis un assistant financier spécialisé. " +
-                            "Posez-moi une question sur " + ticker + " ou une entreprise cotée."
+                            "Posez-moi une question sur " + ticker + " ou une entreprise cotée.",
+                    session.getConversationId()
             );
-            case NEEDS_CLARIFICATION -> OrchestratorResult.clarification(intent.clarificationQuestion());
+            case NEEDS_CLARIFICATION -> OrchestratorResult.clarification(
+                    intent.clarificationQuestion(),
+                    session.getConversationId()
+            );
             case REPORT -> OrchestratorResult.reportGenerated(
                     generateStrategyReport(user, ticker, userMessage)
             );
-            default -> OrchestratorResult.chatResponse(handleChatbot(user, ticker, userMessage));
+            default -> OrchestratorResult.chatResponse(
+                    handleChatbot(user, ticker, userMessage, session),
+                    session.getConversationId()
+            );
         };
     }
-
+    private String findTickerInSessionHistory(ChatSession session) {
+        List<ChatMessage> recent = chatSessionService.getRecentMessages(session, 10);
+        // parcourir du plus récent au plus ancien
+        for (int i = recent.size() - 1; i >= 0; i--) {
+            String msg = recent.get(i).getMessage();
+            String extracted = extractTickerFromMessage(msg);
+            if (extracted != null && !"MULTIPLE".equals(extracted)) {
+                return extracted;
+            }
+        }
+        return null;
+    }
     // =====================================================================
     // DÉTECTION D'INTENTION
     // =====================================================================
@@ -149,9 +205,9 @@ public class MultiAgentOrchestrator {
     // =====================================================================
 
     @Transactional
-    public String handleChatbot(User user, String ticker, String userMessage) {
+    public String handleChatbot(User user, String ticker, String userMessage, ChatSession session) {
         log.info("=== MODE CHATBOT ===");
-        ChatSession session = chatSessionService.createSession(user, ticker, "AGENT");
+
         try {
             log.info("Fetching company name...");
             String companyName = ingestionPipelineService.getCompanyName(ticker);
@@ -173,6 +229,15 @@ public class MultiAgentOrchestrator {
             Double priceClose = ingestionPipelineService.getPriceClose(ticker);
             log.info("Price: {}", priceClose);
 
+            // --- Load recent conversation history ---
+            List<ChatMessage> history = chatSessionService.getRecentMessages(session, 6);
+            StringBuilder historyText = new StringBuilder();
+            if (!history.isEmpty()) {
+                for (ChatMessage msg : history) {
+                    historyText.append(msg.getSender()).append(": ").append(msg.getMessage()).append("\n");
+                }
+            }
+
             String secContext = String.format(
                     "Entreprise: %s (%s)\nNCI Global: %.2f\nRapport SEC: %s\nPrix: $%.2f\n\n%s",
                     companyName, ticker, nciGlobal, filedAt, priceClose, embeddingText);
@@ -189,6 +254,10 @@ public class MultiAgentOrchestrator {
                             - Le NCI Global est un score entre 0 et 1, ne le convertis jamais en dollars ou milliards, explique‑le comme un indicateur de cohérence narrative.
                             - Sois concis, professionnel et utile.
                             - Tu peux reformuler les données pour les rendre compréhensibles, mais sans extrapoler.
+                            - Utilise l'historique de conversation pour maintenir le contexte et éviter les répétitions.
+                            
+                            HISTORIQUE DE LA CONVERSATION :
+                            {history}
                             
                             CONTEXTE SEC :
                             {context}
@@ -196,6 +265,7 @@ public class MultiAgentOrchestrator {
                             QUESTION : {question}
                             """)
                             .param("filedAt", filedAt)
+                            .param("history", historyText.toString())
                             .param("context", secContext)
                             .param("question", userMessage))
                     .call().content();
@@ -274,13 +344,12 @@ public class MultiAgentOrchestrator {
      * Handles casual conversation without any ticker.
      * Uses Mistral to generate a friendly, finance‑aware response.
      */
-    public String handleCasualChat(User user, String userMessage) {
+    public String handleCasualChat(User user, String userMessage, ChatSession session) {
         log.info("=== MODE CASUAL CHAT ===");
-        ChatSession session = chatSessionService.createSession(user, "CASUAL", "CASUAL");
         try {
             String aiResponse = chatClient.prompt()
                     .user(u -> u.text("""
-                Tu es FinPulse, un assistant financier sympathique et professionnel.
+                Tu es FinPulse assistant, un assistant financier sympathique et professionnel.
                 
                 RÈGLES:
                 - Si l'utilisateur te salue, réponds de manière amicale et propose ton aide pour analyser des entreprises cotées.
@@ -401,16 +470,17 @@ public class MultiAgentOrchestrator {
     public record OrchestratorResult(
             Mode         mode,
             String       textResponse,
-            ReportResult reportResult
+            ReportResult reportResult,
+            String       conversationId
     ) {
-        public static OrchestratorResult chatResponse(String text) {
-            return new OrchestratorResult(Mode.CHATBOT, text, null);
+        public static OrchestratorResult chatResponse(String text, String conversationId) {
+            return new OrchestratorResult(Mode.CHATBOT, text, null, conversationId);
         }
-        public static OrchestratorResult clarification(String question) {
-            return new OrchestratorResult(Mode.NEEDS_CLARIFICATION, question, null);
+        public static OrchestratorResult clarification(String question, String conversationId) {
+            return new OrchestratorResult(Mode.NEEDS_CLARIFICATION, question, null, conversationId);
         }
         public static OrchestratorResult reportGenerated(ReportResult r) {
-            return new OrchestratorResult(Mode.REPORT, null, r);
+            return new OrchestratorResult(Mode.REPORT, null, r, null);
         }
     }
 }
