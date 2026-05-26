@@ -57,9 +57,9 @@ public class Agent2RedFlagsExtractor {
                 - f_consistency DOIT être un nombre entre 0.0 et 1.0:
                     * 0.0 à 0.3 : peu de contradiction, l'idée tient la route
                     * 0.3 à 0.6 : contradiction modérée
-                    * 0.6 à 1.0 : forte contradiction, l'idée est risquée
-                - Formule NCI personnalisé: nci_personalized = %.2f + (f_consistency × 20)
-                  (Un NCI plus élevé = moins fiable pour cet argument spécifique)
+                    * 0.6 à 1.0 : forte contradiction, l'idée est risquée   
+                - Formule NCI personnalisé: nci_personalized = %.2f * (1 - f_consistency)
+                      (Un NCI personnalisé plus faible indique plus de contradiction, donc un argument plus risqué)
                 - analysis_summary : 2-3 phrases résumant l'analyse de risque
                 - N'utilise PAS de formatage Markdown. N'écris jamais **, __, ou tout autre marqueur de mise en forme. Utilise uniquement du texte brut.
 
@@ -108,8 +108,8 @@ public class Agent2RedFlagsExtractor {
                         : 0.0;
 
                 double nciPersonalized = node.has("nci_personalized")
-                        ? node.get("nci_personalized").asDouble()
-                        : nciGlobal + (fConsistency * 20);
+                        ? clamp(node.get("nci_personalized").asDouble(), 0.0, 1.0)
+                        : clamp(nciGlobal * (1 - fConsistency), 0.0, 1.0);
 
                 String summary = node.has("analysis_summary")
                         ? node.get("analysis_summary").asText()
