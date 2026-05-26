@@ -9,7 +9,7 @@ import net.omaima.entities.User;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Optional;
 
@@ -397,14 +397,20 @@ public class MultiAgentOrchestrator {
             List<String> supportPoints = agent1.extractSupportEvidence(
                     userArgument, embeddingText, companyName);
 
+            Thread.sleep(20000);
+
             log.info("Phase 2: Agent2...");
             Agent2RedFlagsExtractor.RiskAnalysisResult risk =
                     agent2.analyzeRedFlags(userArgument, embeddingText, nciGlobal);
+
+            Thread.sleep(60000);
 
             log.info("Phase 3: Agent3...");
             String finalConclusion = agent3.synthesizeFinalConclusion(
                     userArgument, supportPoints, risk.redFlags(),
                     risk.fConsistency(), sentiment, priceClose, news);
+
+            Thread.sleep(20000);
 
             log.info("Agent4: PDF...");
             byte[] pdfBytes = agent4.generateStrategyReport(
