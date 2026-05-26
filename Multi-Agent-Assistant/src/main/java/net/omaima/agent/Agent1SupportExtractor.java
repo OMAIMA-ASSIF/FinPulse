@@ -52,6 +52,8 @@ public class Agent1SupportExtractor {
                 - Maximum 5 points, chacun avec une citation courte du texte source
                 - Chaque point doit être une phrase complète et factuelle
                 - N'utilise PAS de formatage Markdown. N'écris jamais **, __, ou tout autre marqueur de mise en forme. Utilise uniquement du texte brut.
+                - Si AUCUN élément ne soutient directement l'argument, ne retourne PAS une liste vide.Dans ce cas, écris un message clair qui explique ce que le rapport contient sur le sujet
+                (innovation, technologie, IA, robotique) et pourquoi cela ne constitue pas une preuve suffisante.
 
 
                 Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
