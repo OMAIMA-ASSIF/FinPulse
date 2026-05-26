@@ -393,22 +393,25 @@ public class MultiAgentOrchestrator {
             List<String> news = agent5.getRecentNews(ticker);
             if (news.isEmpty()) news = List.of("Aucune actualité disponible pour " + ticker);
 
+            String lang = detectLanguage(userArgument);
+            String langInstruction = lang.equals("fr") ? "Réponds en français." : "Answer in English.";
+
             log.info("Phase 1: Agent1...");
             List<String> supportPoints = agent1.extractSupportEvidence(
-                    userArgument, embeddingText, companyName);
+                    userArgument, embeddingText, companyName, langInstruction);
 
             Thread.sleep(20000);
 
             log.info("Phase 2: Agent2...");
             Agent2RedFlagsExtractor.RiskAnalysisResult risk =
-                    agent2.analyzeRedFlags(userArgument, embeddingText, nciGlobal);
+                    agent2.analyzeRedFlags(userArgument, embeddingText, nciGlobal, langInstruction);
 
             Thread.sleep(60000);
 
             log.info("Phase 3: Agent3...");
             String finalConclusion = agent3.synthesizeFinalConclusion(
                     userArgument, supportPoints, risk.redFlags(),
-                    risk.fConsistency(), sentiment, priceClose, news);
+                    risk.fConsistency(), sentiment, priceClose, news, langInstruction);
 
             Thread.sleep(20000);
 
@@ -450,6 +453,14 @@ public class MultiAgentOrchestrator {
             log.error("Error checking company {}: {}", ticker, e.getMessage());
             return false;
         }
+    }
+    private String detectLanguage(String text) {
+        if (text == null) return "en";
+        // Détection basique : présence de caractères accentués courants en français
+        if (text.matches(".*[éèêëàâîïôûùçÉÈÊËÀÂÎÏÔÛÙÇ].*")) {
+            return "fr";
+        }
+        return "en";
     }
     public enum Mode { CHATBOT, REPORT, OUT_OF_SCOPE, NEEDS_CLARIFICATION }
 

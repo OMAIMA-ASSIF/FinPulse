@@ -36,7 +36,7 @@ public class Agent2RedFlagsExtractor {
             String analysisSummary
     ) {}
 
-    public RiskAnalysisResult analyzeRedFlags(String userIdea, String secText, Double nciGlobal) {
+    public RiskAnalysisResult analyzeRedFlags(String userIdea, String secText, Double nciGlobal,String langInstruction) {
         log.info("Agent2 (RedFlagsExtractor): Analyse des risques, NCI Global={}", nciGlobal);
 
         try {
@@ -61,6 +61,8 @@ public class Agent2RedFlagsExtractor {
                 - Formule NCI personnalisé: nci_personalized = %.2f + (f_consistency × 20)
                   (Un NCI plus élevé = moins fiable pour cet argument spécifique)
                 - analysis_summary : 2-3 phrases résumant l'analyse de risque
+                - N'utilise PAS de formatage Markdown. N'écris jamais **, __, ou tout autre marqueur de mise en forme. Utilise uniquement du texte brut.
+
 
                 Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
                 {
@@ -69,7 +71,7 @@ public class Agent2RedFlagsExtractor {
                   "nci_personalized": Y.Y,
                   "analysis_summary": "Résumé factuel de l'analyse"
                 }
-                """, userIdea, nciGlobal, truncateText(secText, 4000), nciGlobal);
+                """, userIdea, nciGlobal, truncateText(secText, 4000), nciGlobal,langInstruction);
 
             String response = chatClient.prompt()
                     .user(prompt)

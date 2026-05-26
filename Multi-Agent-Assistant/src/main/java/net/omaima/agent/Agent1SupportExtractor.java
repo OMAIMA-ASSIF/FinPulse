@@ -31,7 +31,7 @@ public class Agent1SupportExtractor {
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
 
-    public List<String> extractSupportEvidence(String userIdea, String secText, String companyName) {
+    public List<String> extractSupportEvidence(String userIdea, String secText, String companyName, String langInstruction) {
         log.info("Agent1 (SupportExtractor): Extraction des preuves de soutien pour '{}'", companyName);
 
         try {
@@ -51,6 +51,8 @@ public class Agent1SupportExtractor {
                 - Si aucun élément ne soutient l'argument, retourne une liste vide
                 - Maximum 5 points, chacun avec une citation courte du texte source
                 - Chaque point doit être une phrase complète et factuelle
+                - N'utilise PAS de formatage Markdown. N'écris jamais **, __, ou tout autre marqueur de mise en forme. Utilise uniquement du texte brut.
+
 
                 Réponds UNIQUEMENT en JSON valide, sans texte avant ou après:
                 {
@@ -59,7 +61,7 @@ public class Agent1SupportExtractor {
                     "Point factuel 2 (source: extrait du SEC)"
                   ]
                 }
-                """, userIdea, companyName, truncateText(secText, 4000));
+                """, userIdea, companyName, truncateText(secText, 4000),langInstruction);
 
             String response = chatClient.prompt()
                     .user(prompt)

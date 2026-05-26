@@ -30,7 +30,8 @@ public class Agent3FinalSynthesizer {
             Double fConsistency,
             Double marketSentiment,
             Double marketPrice,
-            List<String> newsHeadlines) {
+            List<String> newsHeadlines,
+            String langInstruction) {
 
         log.info("Agent3 (FinalSynthesizer): Synthèse finale en cours...");
 
@@ -78,12 +79,13 @@ public class Agent3FinalSynthesizer {
                 - Jamais inventer des chiffres ou des faits non mentionnés
                 - Être factuel, professionnel et concis
                 - Si les données sont insuffisantes, le mentionner explicitement
+                - N'utilise PAS de formatage Markdown. N'écris jamais **, __, ou tout autre marqueur de mise en forme. Utilise uniquement du texte brut.
                 """,
                     userIdea,
                     fConsistency, riskLevel,
                     marketSentiment, marketPrice, newsText,
                     supportText,
-                    redFlagsText);
+                    redFlagsText,langInstruction);
 
             String conclusion = chatClient.prompt()
                     .user(prompt)
