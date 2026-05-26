@@ -57,12 +57,19 @@ public class MultiAgentOrchestrator {
             // a. Extraction depuis le message
             String extracted = extractTickerFromMessage(userMessage);
 
-            // b. Si toujours rien, chercher dans l'historique de la session
+            // b. Si rien, utiliser le ticker de la session (s'il est pertinent)
+            if (extracted == null && session.getCompanyTicker() != null
+                    && !"CASUAL".equals(session.getCompanyTicker())) {
+                extracted = session.getCompanyTicker();
+                log.info("Utilisation du ticker de la session comme fallback immédiat : {}", extracted);
+            }
+
+            // c. Si toujours rien, chercher dans l'historique de la session
             if (extracted == null) {
                 extracted = findTickerInSessionHistory(session);
             }
 
-            // c. Plusieurs entreprises détectées
+            // d. Plusieurs entreprises détectées
             if ("MULTIPLE".equals(extracted)) {
                 return OrchestratorResult.clarification(
                         "Vous avez mentionné plusieurs entreprises. Veuillez en choisir une seule.",
@@ -70,7 +77,7 @@ public class MultiAgentOrchestrator {
                 );
             }
 
-            // d. Un ticker a été trouvé
+            // e. Un ticker a été trouvé
             if (extracted != null) {
                 ticker = extracted;
                 log.info("Ticker résolu : {}", ticker);
@@ -292,53 +299,71 @@ public class MultiAgentOrchestrator {
      * Returns the uppercase ticker symbol, or null if none is found.
      */
     private String extractTickerFromMessage(String message) {
-        // 1. LLM extraction – now also detects MULTIPLE
+        // LLM extraction with retry
         String llmResult = null;
-        try {
-            String prompt = """
-            You are a stock ticker extractor.
-            From the following user message, return ONLY:
-            - a single stock ticker symbol (uppercase, 1-5 letters) if exactly one company is mentioned,
-            - the word "MULTIPLE" if more than one company is mentioned,
-            - the word "NONE" if no company or ticker is mentioned.
-            Never return any other text.
-            
-            Examples:
-            "Tell me about Apple" → AAPL
-            "Compare Apple and Microsoft" → MULTIPLE
-            "Bonjour" → NONE
-            "donne moi le nci globale de SEMPRA" → SRE
-            
-            Message: "%s"
-            """.formatted(message);
+        int maxRetries = 3;
+        long baseDelay = 2000; // 2 seconds
 
-            String response = chatClient.prompt().user(prompt).call().content();
-            String cleaned = response.trim().toUpperCase().replaceAll("[^A-Z]", "");
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String prompt = """
+                You are a stock ticker extractor.
+                From the following user message, return ONLY:
+                - a single stock ticker symbol (uppercase, 1-5 letters) if exactly one company is mentioned,
+                - the word "MULTIPLE" if more than one company is mentioned,
+                - the word "NONE" if no company or ticker is mentioned.
+                Never return any other text.
+                
+                Examples:
+                "Tell me about Apple" → AAPL
+                "Compare Apple and Microsoft" → MULTIPLE
+                "Bonjour" → NONE
+                "donne moi le nci globale de SEMPRA" → SRE
+                
+                Message: "%s"
+                """.formatted(message);
 
-            if (cleaned.equals("MULTIPLE")) {
-                return "MULTIPLE";                 // <-- explicit multi‑company signal
+                String response = chatClient.prompt().user(prompt).call().content();
+                String cleaned = response.trim().toUpperCase().replaceAll("[^A-Z]", "");
+
+                if (cleaned.equals("MULTIPLE")) {
+                    return "MULTIPLE";
+                }
+                if (!cleaned.equals("NONE") && cleaned.length() >= 2 && cleaned.length() <= 5) {
+                    llmResult = cleaned;
+                    break; // success, exit retry loop
+                }
+                // If we got NONE or invalid format, that's a valid answer – no retry needed
+                log.debug("LLM extraction returned {} (attempt {})", cleaned, attempt);
+                break;
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    log.warn("LLM ticker extraction failed after {} attempts: {}", maxRetries, e.getMessage());
+                } else {
+                    log.warn("LLM ticker extraction attempt {} failed, retrying in {} ms...", attempt, baseDelay * attempt);
+                    try { Thread.sleep(baseDelay * attempt); } catch (InterruptedException ignored) {}
+                }
             }
-            if (!cleaned.equals("NONE") && cleaned.length() >= 2 && cleaned.length() <= 5) {
-                llmResult = cleaned;
-            }
-        } catch (Exception e) {
-            log.warn("LLM ticker extraction error", e);
         }
 
-        // 2. P1 validation only for a single ticker candidate
+        // 2. P1 validation – only for a single ticker candidate
         if (llmResult != null) {
             try {
                 String companyName = ingestionPipelineService.getCompanyName(llmResult);
                 if (companyName != null && !companyName.isBlank()) {
                     log.info("Ticker {} validated with P1 API (company: {})", llmResult, companyName);
-                    return llmResult;
+                } else {
+                    log.info("Ticker {} not found in P1 yet (will be backfilled)", llmResult);
                 }
+                return llmResult;
+            } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
+                log.info("Ticker {} unknown in P1 (404) – keeping for backfill", llmResult);
+                return llmResult;
             } catch (Exception e) {
-                log.warn("P1 validation failed for ticker {}", llmResult);
+                log.warn("P1 validation failed for ticker {} ({}), discarding", llmResult, e.getClass().getSimpleName());
             }
         }
-
-        return null;   // no valid single ticker found
+        return null;
     }
     /**
      * Handles casual conversation without any ticker.
