@@ -1,0 +1,17 @@
+.app-shell {
+    display: flex;
+    flex-direction: column; 
+    height: 100vh; 
+    overflow: hidden;
+}
+.app-content { 
+    flex: 1; 
+    overflow: hidden; 
+    margin-top: var(--header-h); 
+    height: calc(100vh - var(--header-h)); 
+}
+.app-content-full { 
+    flex: 1; 
+    overflow-y: auto; 
+    margin-top: 0; 
+}  

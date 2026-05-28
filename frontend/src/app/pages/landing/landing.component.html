@@ -1,0 +1,412 @@
+
+<div class="landing">
+
+  <!-- ── STICKY HEADER ──────────────────────────────────────────── -->
+  <header class="lp-header">
+    <div class="lp-header__inner">
+
+      <!-- Logo -->
+      <a class="lp-logo" (click)="scrollTo('hero')">
+        <div class="lp-logo__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <span class="lp-logo__name">FinPulse</span>
+        <span class="lp-logo__tag">AI</span>
+      </a>
+
+      <!-- Nav desktop -->
+      <nav class="lp-nav">
+        <button class="lp-nav__link" (click)="scrollTo('discover-preview')">Discover</button>
+        <button class="lp-nav__link" (click)="scrollTo('solutions')">Solutions</button>
+        <button class="lp-nav__link" (click)="scrollTo('ai-agent')">AI Agent</button>
+        <button class="lp-nav__link" (click)="scrollTo('features')">Features</button>
+      </nav>
+
+      <!-- Actions -->
+      <div class="lp-header__actions">
+        <button class="btn btn-ghost" (click)="login()">Sign In</button>
+        <button class="btn btn-primary lp-cta-btn" (click)="register()">Get Started </button>
+        <!-- Mobile burger -->
+        <button class="lp-burger" (click)="mobileMenuOpen.set(!mobileMenuOpen())">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile menu -->
+    @if (mobileMenuOpen()) {
+      <div class="lp-mobile-menu">
+        <button class="lp-mobile-link" (click)="scrollTo('discover-preview')">Discover</button>
+        <button class="lp-mobile-link" (click)="scrollTo('solutions')">Solutions</button>
+        <button class="lp-mobile-link" (click)="scrollTo('ai-agent')">AI Agent</button>
+        <button class="lp-mobile-link" (click)="scrollTo('features')">Features</button>
+        <div style="display:flex;gap:8px;padding:0 16px;margin-top:4px">
+          <button class="btn btn-ghost" style="flex:1;justify-content:center" (click)="login()">Sign In</button>
+          <button class="btn btn-primary" style="flex:1;justify-content:center" (click)="register()">Get Started</button>
+        </div>
+      </div>
+    }
+  </header>
+
+  <!-- ── HERO ───────────────────────────────────────────────────── -->
+  <section class="lp-hero" id="hero">
+    <div class="lp-container lp-hero__inner">
+
+      <!-- Left: copy -->
+      <div class="lp-hero__copy">
+        <div class="lp-hero__badge">
+          <span class="live-dot" style="width:6px;height:6px"></span>
+          AI-Powered Financial Intelligence
+        </div>
+        <h1 class="lp-hero__title display">
+          Know what companies
+          <span class="lp-hero__title-accent"> really say</span>
+          — before the market reacts
+        </h1>
+        <p class="lp-hero__sub">
+          FinPulse AI analyses earnings calls, SEC filings, and financial news to compute
+          the <strong>Narrative Consistency Index (NCI)</strong> — the truth detector for public companies.
+        </p>
+        <div class="lp-hero__actions">
+          <button class="btn btn-primary lp-cta-btn" (click)="register()">
+            Start for free
+          </button>
+          <button class="btn btn-ghost" (click)="scrollTo('solutions')">
+            Learn how it works 
+          </button>
+        </div>
+        <div class="lp-hero__social-proof">
+          <div class="lp-stat"><div class="lp-stat__val mono">500+</div><div class="lp-stat__lbl">Companies tracked</div></div>
+          <div class="lp-stat-divider"></div>
+          <div class="lp-stat"><div class="lp-stat__val mono">98%</div><div class="lp-stat__lbl">Alert accuracy</div></div>
+          <div class="lp-stat-divider"></div>
+          <div class="lp-stat"><div class="lp-stat__val mono">4.9★</div><div class="lp-stat__lbl">Analyst rating</div></div>
+        </div>
+      </div>
+
+      <!-- Right: mini dashboard -->
+      <div class="lp-hero__dashboard">
+        <!-- Dashboard header -->
+        <div class="lp-dash__header">
+          <div class="lp-dash__title">
+            <span class="live-dot"></span>
+            FinPulse Dashboard — Live
+          </div>
+          <div class="mono" style="font-size:10px;color:var(--text-muted)">NCI Index</div>
+        </div>
+
+        <!-- Chart -->
+        <div class="lp-dash__chart-wrap">
+          <canvas #heroChart></canvas>
+        </div>
+
+        <!-- Mini cards -->
+        <div class="lp-dash__cards">
+          <div class="lp-dash__card lp-dash__card--good">
+            <div class="lp-dash__card-ticker mono">AAPL</div>
+            <div class="lp-dash__card-nci mono">86</div>
+            <div class="lp-dash__card-label">High NCI ↑</div>
+          </div>
+          <div class="lp-dash__card lp-dash__card--warn">
+            <div class="lp-dash__card-ticker mono">TSLA</div>
+            <div class="lp-dash__card-nci mono">38</div>
+            <div class="lp-dash__card-label">Risk Alert ⚠</div>
+          </div>
+          <div class="lp-dash__card lp-dash__card--good">
+            <div class="lp-dash__card-ticker mono">NVDA</div>
+            <div class="lp-dash__card-nci mono">91</div>
+            <div class="lp-dash__card-label">Consistent ✓</div>
+          </div>
+          <div class="lp-dash__card lp-dash__card--danger">
+            <div class="lp-dash__card-ticker mono">META</div>
+            <div class="lp-dash__card-nci mono">38</div>
+            <div class="lp-dash__card-label">SEC Risk 🔴</div>
+          </div>
+        </div>
+
+        <!-- Alert preview -->
+        <div class="lp-dash__alert">
+          <span style="font-size:14px">⚡</span>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-primary)">NCI Drop Detected — TSLA</div>
+            <div style="font-size:10px;color:var(--text-muted)">Narrative inconsistency vs Q3 filing · 2 min ago</div>
+          </div>
+          <span class="chip chip-red" style="font-size:9px;margin-left:auto">HIGH RISK</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── DISCOVER PREVIEW ───────────────────────────────────────── -->
+  <section class="lp-section" id="discover-preview">
+    <div class="lp-container">
+      <div class="lp-section__header">
+        <div class="lp-section__badge chip chip-cyan">Live Companies</div>
+        <h2 class="lp-section__title display">Discover Companies by NCI</h2>
+        <p class="lp-section__sub">
+          Browse real-time narrative scores for the world's most-tracked public companies.
+        </p>
+      </div>
+
+      <div class="lp-companies-grid">
+        @for (c of mockCompanies; track c.ticker) {
+          <div class="lp-company-card">
+            <div class="lp-company-card__header">
+              <div class="lp-company-card__logo">{{ c.ticker.slice(0,2) }}</div>
+              <div class="lp-company-card__info">
+                <div class="lp-company-card__ticker mono">{{ c.ticker }}</div>
+                <div class="lp-company-card__name">{{ c.name }}</div>
+              </div>
+              <span class="nci-badge" [class]="c.nciClass">{{ c.nci }}</span>
+            </div>
+            <div class="lp-company-card__meta">
+              <span class="lp-company-card__sector">{{ c.sector }}</span>
+              <span class="chip"
+                    [class]="c.sentiment === 'POSITIVE' ? 'chip-green' : c.sentiment === 'NEGATIVE' ? 'chip-red' : 'chip-amber'">
+                {{ c.sentiment }}
+              </span>
+            </div>
+            <div class="lp-company-card__bar-track">
+              <div class="lp-company-card__bar-fill"
+                   [style.width.%]="c.nci"
+                   [style.background]="c.nci >= 70 ? 'var(--green)' : c.nci >= 40 ? 'var(--orange)' : 'var(--red)'">
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm lp-company-card__btn" (click)="login()">
+              View Company →
+            </button>
+          </div>
+        }
+      </div>
+
+      <div class="lp-section__cta">
+        <p>Sign in to access all 500+ companies, live NCI scores and alerts.</p>
+        <button class="btn btn-primary lp-cta-btn" (click)="register()">Get full access →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SOLUTIONS ──────────────────────────────────────────────── -->
+  <section class="lp-section lp-section--alt" id="solutions">
+    <div class="lp-container">
+      <div class="lp-section__header">
+        <div class="lp-section__badge chip chip-amber">How it works</div>
+        <h2 class="lp-section__title display">The NCI Explained</h2>
+        <p class="lp-section__sub">
+          A rigorous, AI-powered metric that turns corporate communication into actionable intelligence.
+        </p>
+      </div>
+
+      <div class="lp-solutions-grid">
+        @for (s of solutions; track s.title) {
+          <div class="lp-solution-card">
+            <div class="lp-solution-card__icon" [style.color]="s.color">{{ s.icon }}</div>
+            <h3 class="lp-solution-card__title">{{ s.title }}</h3>
+            <p class="lp-solution-card__desc">{{ s.desc }}</p>
+          </div>
+        }
+      </div>
+
+      <!-- NCI Formula visual -->
+      <div class="lp-formula">
+        <div class="section-label" style="text-align:center;margin-bottom:16px">NCI Formula</div>
+        <div class="lp-formula__inner">
+          <div class="lp-formula__term lp-formula__term--pos">Semantic Coherence</div>
+          <span class="lp-formula__op">+</span>
+          <div class="lp-formula__term lp-formula__term--pos">Linguistic Stability</div>
+          <span class="lp-formula__op">+</span>
+          <div class="lp-formula__term lp-formula__term--pos">Theme Consistency</div>
+          <span class="lp-formula__op">−</span>
+          <div class="lp-formula__term lp-formula__term--neg">Evasiveness</div>
+          <span class="lp-formula__op">−</span>
+          <div class="lp-formula__term lp-formula__term--neg">Contradictions</div>
+          <span class="lp-formula__op">=</span>
+          <div class="lp-formula__result mono">NCI (0–100)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── AI AGENT ───────────────────────────────────────────────── -->
+  <section class="lp-section" id="ai-agent">
+    <div class="lp-container">
+      <div class="lp-section__header">
+        <div class="lp-section__badge chip chip-brand">AI-Powered</div>
+        <h2 class="lp-section__title display">Meet FinPulse AI Agent</h2>
+        <p class="lp-section__sub">
+          Two intelligent modes — one powerful financial companion.
+        </p>
+      </div>
+
+      <div class="lp-agent-grid">
+
+        <!-- Mode 1: Agent -->
+        <div class="lp-agent-card">
+          <div class="lp-agent-card__badge mode-pill--agent">
+            <span class="mode-dot mode-dot--agent"></span>
+            Agent Mode
+          </div>
+          <h3 class="lp-agent-card__title">Conversational Analysis</h3>
+          <p class="lp-agent-card__desc">
+            Ask any question about a company's narrative, NCI score, SEC risks, or market sentiment.
+            Get instant, structured answers backed by real data.
+          </p>
+          <div class="lp-agent-card__features">
+            <div class="lp-agent-feature"> NCI score breakdown</div>
+            <div class="lp-agent-feature"> Risk & opportunity summary</div>
+            <div class="lp-agent-feature"> SEC citation detection</div>
+            <div class="lp-agent-feature">Sentiment trend analysis</div>
+          </div>
+          <div class="lp-agent-card__demo">
+            <div class="demo-msg demo-msg--user">"What is Tesla's NCI score and why is it risky?"</div>
+            <div class="demo-msg demo-msg--ai">
+              <strong>TSLA NCI: 38/100</strong> — Below threshold. Detected 3 contradictions between Q3 earnings guidance and Q4 SEC 10-K filing. Sentiment shifted negative in 67% of recent news coverage…
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 2: Strategy -->
+        <div class="lp-agent-card lp-agent-card--strategy">
+          <div class="lp-agent-card__badge mode-pill--strategy">
+            <span class="mode-dot mode-dot--strategy"></span>
+            Strategy Mode
+          </div>
+          <h3 class="lp-agent-card__title">Investment Strategy Engine</h3>
+          <p class="lp-agent-card__desc">
+            Describe your investment thesis. FinPulse AI automatically detects it and generates a
+            full strategy report with SEC contradiction analysis.
+          </p>
+          <div class="lp-agent-card__features">
+            <div class="lp-agent-feature"> Thesis validation</div>
+            <div class="lp-agent-feature"> Bull case arguments</div>
+            <div class="lp-agent-feature"> Risk identification</div>
+            <div class="lp-agent-feature"> BUY / HOLD / AVOID recommendation</div>
+          </div>
+          <!-- Strategy Card preview -->
+          <div class="lp-strategy-card-preview">
+            <div class="lp-sc__header">
+              <div class="lp-sc__ticker mono">NVDA</div>
+              <span class="chip chip-green" style="font-size:11px;padding:3px 10px">BUY</span>
+              <span class="mono" style="font-size:10px;color:var(--cyan)">NCI 91</span>
+            </div>
+            <div class="lp-sc__row lp-sc__row--bull"> Strong AI demand narrative consistency</div>
+            <div class="lp-sc__row lp-sc__row--bull"> SEC filings align with earnings guidance</div>
+            <div class="lp-sc__row lp-sc__row--risk"> Regulatory exposure in China markets</div>
+            <div class="lp-sc__actions">
+              <div class="lp-sc__btn">💾 Save Strategy</div>
+              <div class="lp-sc__btn">📥 Download PDF</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURES ───────────────────────────────────────────────── -->
+  <section class="lp-section lp-section--alt" id="features">
+    <div class="lp-container">
+      <div class="lp-section__header">
+        <div class="lp-section__badge chip chip-green">Platform</div>
+        <h2 class="lp-section__title display">Everything you need</h2>
+        <p class="lp-section__sub">
+          A complete financial intelligence platform — from data to decision.
+        </p>
+      </div>
+      <div class="lp-features-grid">
+        @for (f of features; track f.title) {
+          <div class="lp-feature-card">
+            <div class="lp-feature-card__icon">{{ f.icon }}</div>
+            <div class="lp-feature-card__title">{{ f.title }}</div>
+            <div class="lp-feature-card__desc">{{ f.desc }}</div>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA BANNER ─────────────────────────────────────────────── -->
+  <section class="lp-cta-section">
+    <div class="lp-container">
+      <h2 class="lp-cta-section__title display">Start analysing narratives today</h2>
+      <p class="lp-cta-section__sub">
+        Join analysts who trust FinPulse AI to detect narrative risk before the market does.
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary lp-cta-btn" (click)="register()">Create free account</button>
+        <button class="btn btn-ghost" style="border-color:rgba(255,255,255,0.2);color:rgba(255,255,255,0.7)"
+                (click)="login()">Sign in</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ─────────────────────────────────────────────────── -->
+  <footer class="lp-footer">
+    <div class="lp-container">
+      <div class="lp-footer__grid">
+
+        <!-- Brand -->
+        <div class="lp-footer__brand">
+          <div class="lp-logo" style="margin-bottom:10px">
+            <div class="lp-logo__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <span class="lp-logo__name">FinPulse</span>
+            <span class="lp-logo__tag">AI</span>
+          </div>
+          <p class="lp-footer__brand-desc">
+            The AI-powered narrative consistency platform for modern investors.
+          </p>
+          <div class="lp-footer__tech-badges">
+            <span class="lp-tech-badge"> Keycloak</span>
+            <span class="lp-tech-badge"> Spring AI</span>
+            <span class="lp-tech-badge"> Angular</span>
+            <span class="lp-tech-badge"> PostgreSQL</span>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="lp-footer__stats">
+          <div class="section-label">Platform Stats</div>
+          <div class="lp-footer__stat-grid">
+            <div class="lp-footer__stat"><div class="mono" style="font-size:22px;font-weight:700;color:var(--brand)">100+</div><div style="font-size:11px;color:var(--text-muted)">Companies tracked</div></div>
+            <div class="lp-footer__stat"><div class="mono" style="font-size:22px;font-weight:700;color:var(--green)">98%</div><div style="font-size:11px;color:var(--text-muted)">Alert accuracy</div></div>
+            <div class="lp-footer__stat"><div class="mono" style="font-size:22px;font-weight:700;color:var(--cyan)">24/7</div><div style="font-size:11px;color:var(--text-muted)">Live monitoring</div></div>
+            <div class="lp-footer__stat"><div class="mono" style="font-size:22px;font-weight:700;color:var(--amber)">NCI</div><div style="font-size:11px;color:var(--text-muted)">Proprietary index</div></div>
+          </div>
+        </div>
+
+        <!-- Links -->
+        <div>
+          <div class="section-label">Platform</div>
+          <div class="lp-footer__links">
+            <button class="lp-footer__link" (click)="scrollTo('discover-preview')">Discover</button>
+            <button class="lp-footer__link" (click)="scrollTo('solutions')">Solutions</button>
+            <button class="lp-footer__link" (click)="scrollTo('ai-agent')">AI Agent</button>
+            <button class="lp-footer__link" (click)="scrollTo('features')">Features</button>
+            <button class="lp-footer__link" (click)="login()">Sign In</button>
+            <button class="lp-footer__link" (click)="register()">Get Started</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="lp-footer__bottom">
+        <span>© {{ 2025 }} FinPulse AI. All rights reserved.</span>
+        <span class="mono" style="font-size:10px">
+           Secured by Keycloak · HTTPS · JWT Authentication
+        </span>
+      </div>
+    </div>
+  </footer>
+
+</div>

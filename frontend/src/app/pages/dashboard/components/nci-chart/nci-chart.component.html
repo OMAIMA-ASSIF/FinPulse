@@ -1,0 +1,29 @@
+<div class="nci-chart card fade-up">
+  <div class="nci-chart__header">
+    <div>
+      <div class="section-label">NCI History — Narrative Consistency Archive</div>
+    </div>
+    <div class="nci-chart__periods">
+      @for (p of periods; track p.months) {
+        <button
+          class="period-btn"
+          [class.period-btn--active]="activePeriod === p.months"
+          (click)="setPeriod(p.months)">
+          {{ p.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (loading) {
+    <div class="nci-chart__loading">
+      <div class="spinner"></div>
+    </div>
+  } @else if (history.length === 0) {
+    <div class="nci-chart__empty">No history data available</div>
+  } @else {
+    <div class="nci-chart__canvas-wrap">
+      <canvas #chartCanvas></canvas>
+    </div>
+  }
+</div>

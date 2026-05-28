@@ -1,0 +1,56 @@
+<div class="dashboard-layout">
+
+  <!-- LEFT SIDEBAR: Watchlist / Leaderboard -->
+  <aside class="dash-left scroll-y">
+    <app-watchlist-sidebar
+      [companies]="companies()"
+      [loading]="loadingCompanies()"
+      [selectedId]="selectedCompany()?.id ?? null"
+      (companySelected)="selectCompany($event)"
+    />
+  </aside>
+
+  <!-- CENTER PANEL: Main company data -->
+  <main class="dash-center scroll-y">
+    @if (selectedCompany()) {
+
+      <!-- Company header -->
+      <app-company-header [company]="selectedCompany()!" />
+
+      <!-- Metrics -->
+      <app-metrics-panel
+        [company]="selectedCompany()!"
+        [personalizedNci]="personalizedNci()"
+      />
+
+      <!-- NCI History Chart -->
+      <app-nci-chart
+        [history]="nciHistory()"
+        [loading]="loadingDetail()"
+        (periodChanged)="setHistoryPeriod($event)"
+      />
+
+    } @else {
+      <div class="dash-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <p>Select a company to view analysis</p>
+      </div>
+    }
+  </main>
+
+  <!-- RIGHT SIDEBAR: Alerts + News -->
+  <aside class="dash-right scroll-y">
+
+    <!-- Alert Center -->
+    <app-alert-center
+      [alerts]="companyAlerts()"
+      [ticker]="selectedCompany()?.ticker ?? ''"
+    />
+
+    <!-- Breaking News -->
+    <app-breaking-news [news]="news()" />
+
+  </aside>
+</div>

@@ -1,0 +1,27 @@
+.nci-chart { padding: 16px 18px; }
+.nci-chart__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+.nci-chart__periods { display: flex; gap: 4px; }
+.period-btn {
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--border-base);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.period-btn:hover { border-color: var(--brand); color: var(--brand); }
+.period-btn--active { background: var(--brand-dim); border-color: rgba(59,130,246,0.3); color: var(--brand); }
+
+.nci-chart__canvas-wrap { position: relative; height: 220px; }
+.nci-chart__loading { display: flex; align-items: center; justify-content: center; height: 200px; }
+.nci-chart__empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }

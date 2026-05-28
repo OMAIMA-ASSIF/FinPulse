@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    /**
+     * Cette page est chargée dans un iframe invisible par Keycloak
+     * pour vérifier silencieusement si l'utilisateur a une session active.
+     *
+     * Elle doit être dans : /assets/silent-check-sso.html
+     * Et référencée dans keycloak.init() via silentCheckSsoRedirectUri.
+     */
+    parent.postMessage(location.href, location.origin);
+  </script>
+</body>
+</html>

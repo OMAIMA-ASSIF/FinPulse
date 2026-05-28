@@ -1,0 +1,280 @@
+<div class="watchlist-layout">
+
+  <!-- ── LEFT: Companies ───────────────────────────────────────── -->
+  <aside class="wl-left scroll-y">
+    <div class="wl-sidebar-header">
+      <div class="wl-sidebar-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+        </svg>
+        My Watchlist
+      </div>
+      <div class="wl-live-badge" [class.wl-live-badge--on]="sse.connected()">
+        <span class="live-dot"
+              [style.background]="sse.connected() ? 'var(--green)' : 'var(--text-muted)'">
+        </span>
+        {{ sse.connected() ? 'LIVE' : 'OFF' }}
+      </div>
+    </div>
+
+    <div class="wl-list">
+      @if (watchlistSvc.loading()) {
+        <div style="padding:20px;text-align:center"><div class="spinner"></div></div>
+      }
+
+      @for (entry of watchlistSvc.entries(); track entry.company.id) {
+        <div class="wl-item-wrap">
+          <button class="wl-item"
+                  [class.wl-item--active]="selectedCompany()?.id === entry.company.id"
+                  [class.wl-item--flash]="isFlashing(entry.company.ticker)"
+                  (click)="selectCompany(entry.company)">
+            <span class="wl-item__trend" [class]="trendClass(entry.company.nciLabel)">
+              {{ trendIcon(entry.company.nciLabel) }}
+            </span>
+            <div class="wl-item__info">
+              <div class="wl-item__ticker mono">{{ entry.company.ticker }}</div>
+              <div class="wl-item__name">{{ entry.company.name }}</div>
+            </div>
+            <div class="wl-item__right">
+              <span class="nci-badge nci-{{ entry.company.nciLabel.toLowerCase() }}">
+                {{ (entry.company.nciGlobal * 100) | number:'1.0-0' }}
+              </span>
+              @if (alerts.unreadForCompany(entry.company.ticker) > 0) {
+                <span class="unread-badge">{{ alerts.unreadForCompany(entry.company.ticker) }}</span>
+              }
+            </div>
+          </button>
+
+          <!-- Unpin button — NE supprime PAS la stratégie -->
+          <button class="wl-item__remove"
+                  title="Remove from watchlist (strategy is kept)"
+                  (click)="askRemove(entry.company.id, $event)">✕</button>
+
+          <!-- Confirmation inline -->
+          @if (removeConfirmId() === entry.company.id) {
+            <div class="wl-remove-confirm">
+              <p>Remove <strong>{{ entry.company.ticker }}</strong> from watchlist?</p>
+              @if (hasStrategy() && selectedCompany()?.id === entry.company.id) {
+                <p class="wl-remove-confirm__note">
+                  ⓘ Your strategy for {{ entry.company.ticker }} will be kept.
+                </p>
+              }
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <button class="btn btn-ghost btn-xs" (click)="cancelRemove()">Cancel</button>
+                <button class="btn btn-danger btn-xs" (click)="confirmRemove(entry.company.id)">
+                  Remove
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      @if (watchlistSvc.entries().length === 0 && !watchlistSvc.loading()) {
+        <div class="wl-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+          </svg>
+          <p>No pinned companies</p>
+          <a routerLink="/discover" class="btn btn-primary btn-sm" style="margin-top:8px">
+            Discover Companies
+          </a>
+        </div>
+      }
+    </div>
+  </aside>
+
+  <!-- ── CENTER: Data ────────────────────────────────────────────── -->
+  <main class="wl-center scroll-y">
+    @if (selectedCompany()) {
+
+      <!-- Header -->
+      <div class="wl-co-header card">
+        <div class="wl-co-logo">{{ selectedCompany()!.ticker.slice(0,2) }}</div>
+        <div class="wl-co-info">
+          <div class="wl-co-ticker mono">{{ selectedCompany()!.ticker }}</div>
+          <h2 class="wl-co-name display">{{ selectedCompany()!.name }}</h2>
+          <div class="wl-co-meta">{{ selectedCompany()!.sector }}</div>
+        </div>
+        <div class="wl-co-actions">
+          <button class="btn btn-ghost btn-sm"
+                  (click)="openCompanyPage(selectedCompany()!.id)">
+            Full Dashboard 
+          </button>
+          <button class="btn btn-ghost btn-sm"
+                  (click)="analyzeWithAgent(selectedCompany()!.id)">
+            🤖 AI Agent
+          </button>
+        </div>
+      </div>
+
+      <!-- Strategy indicator -->
+      @if (hasStrategy()) {
+        <div class="wl-strategy-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          Active strategy — NCI personalized:
+          <strong class="mono" [style.color]="nciColor(personalizedNci()!)">
+            {{ personalizedNci() !== null ? (personalizedNci()! * 100 | number:'1.1-1') : '—' }}
+          </strong>
+        </div>
+      }
+
+      <!-- Metrics -->
+      <div class="wl-metrics">
+        <div class="wl-metric card">
+          <div class="wl-metric__label">NCI Global</div>
+          <div class="wl-metric__val mono"
+               [style.color]="nciColor(selectedCompany()!.nciGlobal)">
+            {{ (selectedCompany()!.nciGlobal * 100) | number:'1.1-1' }}
+          </div>
+          <div class="wl-metric__bar">
+            <div class="wl-metric__fill"
+                 [style.width.%]="selectedCompany()!.nciGlobal * 100"
+                 [style.background]="nciColor(selectedCompany()!.nciGlobal)"></div>
+          </div>
+        </div>
+
+        <div class="wl-metric card">
+          <div class="wl-metric__label">Sentiment</div>
+          <div class="wl-metric__val mono"
+               [style.color]="nciColor(selectedCompany()!.sentimentAvg)">
+            {{ (selectedCompany()!.sentimentAvg * 100) | number:'1.1-1' }}
+          </div>
+          <span class="chip" [class]="sentimentClass(selectedCompany()!.sentimentAvg)">
+            {{ sentimentLabel(selectedCompany()!.sentimentAvg) }}
+          </span>
+        </div>
+
+        <!-- Price 24h -->
+        <div class="wl-metric card">
+          <div class="wl-metric__label">Price 24h</div>
+          @if (loadingPrice()) {
+            <div class="spinner" style="width:14px;height:14px;margin-top:4px"></div>
+          } @else if (priceData()) {
+            <div class="wl-metric__val mono" style="font-size:17px">
+              {{ priceData()!.price | number:'1.2-2' }}
+              <span style="font-size:11px;color:var(--text-muted)">{{ priceData()!.currency }}</span>
+            </div>
+            <span class="mono" style="font-size:11px;font-weight:700"
+                  [style.color]="priceData()!.changePct24h >= 0 ? 'var(--green)' : 'var(--red)'">
+              {{ priceData()!.changePct24h >= 0 ? '+' : '' }}{{ priceData()!.changePct24h | number:'1.2-2' }}%
+            </span>
+          } @else {
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">N/A</div>
+          }
+        </div>
+
+        <div class="wl-metric card">
+          <div class="wl-metric__label">Risk Level</div>
+          <div class="wl-metric__risk"
+               [style.color]="nciColor(selectedCompany()!.nciGlobal)">
+            ⚠ {{ formatRiskLevel(selectedCompany()!.riskLevel) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- ── NCI Chart (composant réutilisable) ─────────────────── -->
+      <div class="card wl-chart-card">
+        <app-nci-chart [companyId]="selectedCompany()!.id" />
+      </div>
+
+    } @else {
+      <div class="wl-no-selection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+        </svg>
+        <p>Select a company from your watchlist</p>
+      </div>
+    }
+  </main>
+
+  <!-- ── RIGHT: Alerts 50% + News 50% ───────────────────────────── -->
+  <aside class="wl-right">
+
+    <!-- ALERTS -->
+    <div class="wl-panel wl-panel--alerts">
+      <div class="wl-panel-header">
+        <div class="wl-panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+          Alerts
+          @if (alerts.unreadCount() > 0) {
+            <span class="unread-badge">{{ alerts.unreadCount() }}</span>
+          }
+        </div>
+        @if (alerts.unreadCount() > 0) {
+          <button class="btn btn-ghost btn-xs" (click)="markAllRead()">All read</button>
+        }
+      </div>
+      <div class="wl-panel-body scroll-y">
+        @if (companyAlerts().length === 0) {
+          <div class="wl-panel-empty">No alerts for this company</div>
+        }
+        @for (alert of companyAlerts(); track alert.id) {
+          <div class="wl-alert-item" [class.wl-alert-item--unread]="!alert.isRead">
+            <div class="wl-alert-icon">{{ alertIcon(alert.alertType) }}</div>
+            <div class="wl-alert-body">
+              <div class="wl-alert-top">
+                <span [class]="alertChipClass(alert.alertType)">
+                  {{ formatAlertType(alert.alertType) }}
+                </span>
+                @if (!alert.isRead) { <span class="wl-alert-dot"></span> }
+              </div>
+              <p class="wl-alert-msg">{{ alert.message }}</p>
+              <div class="wl-alert-footer">
+                <span class="mono" style="font-size:10px;color:var(--text-muted)">
+                  {{ alert.createdAt | date:'MMM d, HH:mm' }}
+                </span>
+                @if (!alert.isRead) {
+                  <button class="btn btn-ghost btn-xs" (click)="markRead(alert.id)">Read</button>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="wl-panel-divider"></div>
+
+    <!-- NEWS -->
+    <div class="wl-panel wl-panel--news">
+      <div class="wl-panel-header">
+        <div class="wl-panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2z"/>
+          </svg>
+          Breaking News
+        </div>
+      </div>
+      <div class="wl-panel-body scroll-y">
+        @if (news().length === 0) {
+          <div class="wl-panel-empty">No news available</div>
+        }
+        @for (item of news(); track item.id) {
+          <div class="wl-news-item">
+            <div class="wl-news-top">
+              <span class="wl-news-source mono">{{ item.source }}</span>
+              <span class="chip" [class]="sentimentClass(item.sentimentScore)">
+                {{ sentimentLabel(item.sentimentScore) }}
+              </span>
+            </div>
+            @if (item.url) {
+              <a class="wl-news-title" [href]="item.url" target="_blank" rel="noopener">
+                {{ item.title }} ↗
+              </a>
+            } @else {
+              <p class="wl-news-title">{{ item.title }}</p>
+            }
+            <div class="wl-news-date mono">{{ item.publishedAt | date:'MMM d, HH:mm' }}</div>
+          </div>
+        }
+      </div>
+    </div>
+
+  </aside>
+</div>

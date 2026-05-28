@@ -1,0 +1,71 @@
+<div class="notif-page">
+  <div class="notif-header">
+    <div>
+      <h1 class="display notif-page__title">Notifications</h1>
+      <p class="notif-page__sub">{{ alertSvc.unreadCount() }} unread alerts</p>
+    </div>
+    @if (alertSvc.unreadCount() > 0) {
+      <button class="btn btn-ghost" (click)="markAllRead()">✓ Mark all read</button>
+    }
+  </div>
+
+  <!-- Tabs -->
+  <div class="notif-tabs">
+    <button class="notif-tab" [class.notif-tab--active]="activeTab()==='all'"
+            (click)="activeTab.set('all')">
+      All <span class="notif-tab__count">{{ alertSvc.alerts().length }}</span>
+    </button>
+    <button class="notif-tab" [class.notif-tab--active]="activeTab()==='unread'"
+            (click)="activeTab.set('unread')">
+      Unread
+      @if (alertSvc.unreadCount() > 0) {
+        <span class="unread-badge" style="margin-left:4px">{{ alertSvc.unreadCount() }}</span>
+      }
+    </button>
+  </div>
+
+  @if (alertSvc.loading()) {
+    <div class="notif-loading"><div class="spinner"></div></div>
+  } @else if (displayed().length === 0) {
+    <div class="notif-empty">
+      <h3>{{ activeTab() === 'unread' ? "You're all caught up!" : 'No alerts yet' }}</h3>
+      <p>Alerts are generated automatically when NCI changes or new risks are detected.</p>
+    </div>
+  } @else {
+    <div class="notif-list">
+      @for (alert of displayed(); track alert.id) {
+        <div class="notif-card" [class.notif-card--unread]="!alert.isRead">
+
+          <div class="notif-card__icon">{{ alertIcon(alert.alertType) }}</div>
+
+          <div class="notif-card__body">
+            <div class="notif-card__top">
+              <span class="notif-card__company mono">{{ alert.companyTicker }}</span>
+              <span [class]="chipClass(alert.alertType)">{{ formatAlertType(alert.alertType) }}</span>
+              @if (!alert.isRead) { <span class="notif-card__dot"></span> }
+            </div>
+
+            <p class="notif-card__msg">{{ alert.message }}</p>
+
+            <div class="notif-card__footer">
+              <span class="mono notif-card__date">{{ alert.createdAt | date:'MMM d yyyy, HH:mm' }}</span>
+              <div class="notif-card__actions">
+                <button class="btn btn-ghost btn-xs" (click)="openCompanyDashboard(alert)">
+                  Full Dashboard 
+                </button>
+                <button class="btn btn-ghost btn-xs" (click)="openStrategy(alert)">
+                  Open Strategy
+                </button>
+                <!-- Mark read -->
+                @if (!alert.isRead) {
+                  <button class="btn btn-ghost btn-xs" (click)="markRead(alert)">Mark read</button>
+                }
+              </div>
+            </div>
+          </div>
+
+        </div>
+      }
+    </div>
+  }
+</div>

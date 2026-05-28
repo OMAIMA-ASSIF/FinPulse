@@ -1,0 +1,52 @@
+<div class="alert-center">
+
+  <!-- Header -->
+  <div class="alert-center__header">
+    <div class="alert-center__title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 01-3.46 0"/>
+      </svg>
+      Alert Center
+      @if (unread > 0) {
+        <span class="unread-badge">{{ unread }}</span>
+      }
+    </div>
+    @if (unread > 0) {
+      <button class="btn btn-ghost btn-xs" (click)="markAllRead()">Mark all read</button>
+    }
+  </div>
+
+  <!-- Alert list -->
+  <div class="alert-center__list">
+    @if (alerts.length === 0) {
+      <div class="alert-center__empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        </svg>
+        <span>No alerts for {{ ticker || 'this company' }}</span>
+      </div>
+    }
+
+    @for (alert of alerts; track alert.id) {
+      <div class="alert-item" [class.alert-item--unread]="!alert.isRead">
+        <div class="alert-item__icon">{{ alertIcon(alert.alertType) }}</div>
+        <div class="alert-item__body">
+          <div class="alert-item__top">
+            <span [class]="chipClass(alert.alertType)">{{ formatAlertType(alert.alertType) }}</span>
+            @if (!alert.isRead) {
+              <span class="alert-item__dot"></span>
+            }
+          </div>
+          <p class="alert-item__message">{{ alert.message }}</p>
+          <div class="alert-item__footer">
+            <span class="alert-item__time mono">{{ alert.createdAt | date:'MMM d, HH:mm' }}</span>
+            @if (!alert.isRead) {
+              <button class="btn btn-ghost btn-xs" (click)="markRead(alert)">Read</button>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,114 @@
+.watchlist { display: flex; flex-direction: column; height: 100%; }
+
+.watchlist__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border-dim);
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
+  z-index: 2;
+}
+.watchlist__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.watchlist__title svg { width: 14px; height: 14px; color: var(--brand); }
+
+.watchlist__sse {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.watchlist__sse--live { color: var(--green); }
+
+.watchlist__list { padding: 6px 8px; }
+
+/* ── Watchlist item ──────────────────────────────────────────────── */
+.watchlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 8px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 2px;
+  animation: slideIn 0.2s ease;
+}
+.watchlist-item:hover {
+  background: var(--bg-elevated);
+}
+.watchlist-item--active {
+  background: var(--brand-dim);
+  border-color: rgba(59,130,246,0.2);
+}
+.watchlist-item--skeleton {
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.watchlist-item__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.watchlist-item__trend {
+  font-size: 14px;
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.watchlist-item__info { min-width: 0; }
+.watchlist-item__ticker {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+}
+.watchlist-item--active .watchlist-item__ticker { color: var(--brand); }
+.watchlist-item__name {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  display: block;
+  margin-top: 1px;
+}
+
+.watchlist-item__right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.watchlist-item__nci { font-size: 10px; }
+.watchlist-item__alerts { font-size: 9px; }
+
+/* Flash animation on SSE update */
+.watchlist-item.flash {
+  animation: flashGreen 0.6s ease;
+}

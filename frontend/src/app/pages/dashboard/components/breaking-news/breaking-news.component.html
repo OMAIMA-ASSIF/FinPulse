@@ -1,0 +1,37 @@
+<div class="news-panel">
+  <div class="news-panel__header">
+    <div class="news-panel__title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/>
+        <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>
+      </svg>
+      Breaking News
+    </div>
+  </div>
+
+  <div class="news-panel__list">
+    @if (news.length === 0) {
+      <div class="news-panel__empty">No news available</div>
+    }
+    @for (item of news; track item.id) {
+      <div class="news-item">
+        <div class="news-item__top">
+          <span class="news-item__source mono">{{ item.source }}</span>
+          <span [class]="sentimentClass(item.sentimentLabel)">{{ item.sentimentLabel }}</span>
+        </div>
+        @if (item.url) {
+          <a class="news-item__title" [href]="item.url" target="_blank" rel="noopener">
+            {{ item.title }}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+        } @else {
+          <p class="news-item__title news-item__title--no-link">{{ item.title }}</p>
+        }
+        <div class="news-item__date mono">{{ item.publishedAt | date:'MMM d, HH:mm' }}</div>
+      </div>
+    }
+  </div>
+</div>

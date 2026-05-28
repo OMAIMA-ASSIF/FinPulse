@@ -1,0 +1,127 @@
+<div class="co-page">
+  @if (loading()) {
+    <div class="co-loading"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div></div>
+  } @else if (company()) {
+
+    <button class="co-back" (click)="goBack()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Discover
+    </button>
+
+    <!-- Hero header -->
+    <div class="co-hero card">
+      <div class="co-hero__logo">{{ company()!.ticker.slice(0,2) }}</div>
+      <div class="co-hero__info">
+        <div class="co-hero__ticker mono">{{ company()!.ticker }}</div>
+        <h1 class="co-hero__name display">{{ company()!.name }}</h1>
+        <div class="co-hero__sector">{{ company()!.sector }}</div>
+      </div>
+      <div class="co-hero__badges">
+        <span class="nci-badge nci-{{ company()!.nciLabel.toLowerCase() }}">
+          NCI {{ (company()!.nciGlobal * 100) | number:'1.1-1' }}
+        </span>
+        <span class="co-hero__trend" [class]="trendClass(trend())">
+          {{ trendIcon(trend()) }} {{ trend() }}
+        </span>
+        @if (sse.connected()) { <span class="live-dot"></span> }
+      </div>
+      <div class="co-hero__actions">
+        <button class="btn btn-ghost btn-sm"
+                [class.btn-success]="isPinned()"
+                [disabled]="pinning() || isPinned()"
+                (click)="pinToWatchlist()">
+          @if (pinning()) { <div class="spinner" style="width:12px;height:12px;border-width:2px"></div> }
+          @else if (isPinned()) { ✓ Pinned }
+          @else { Pin to Watchlist }
+        </button>
+        <button class="btn btn-primary btn-sm" (click)="analyzeWithAgent()">
+          Analyze with AI Agent
+        </button>
+      </div>
+    </div>
+
+    <!-- Metrics row -->
+    <div class="co-metrics">
+      <div class="card co-metric">
+        <div class="co-metric__label">NCI Score</div>
+        <div class="co-metric__val mono" [style.color]="nciColor(company()!.nciGlobal)">
+          {{ (company()!.nciGlobal * 100) | number:'1.2-2' }}
+        </div>
+        <span class="nci-badge nci-{{ company()!.nciLabel.toLowerCase() }}">{{ company()!.nciLabel }}</span>
+      </div>
+      <div class="card co-metric">
+        <div class="co-metric__label">Sentiment</div>
+        <div class="co-metric__val mono" [style.color]="nciColor(company()!.sentimentAvg)">
+          {{ (company()!.sentimentAvg * 100) | number:'1.2-2' }}
+        </div>
+        <span [class]="sentimentClass(company()!.sentimentAvg)">{{ sentimentLabel(company()!.sentimentAvg) }}</span>
+      </div>
+      <div class="card co-metric">
+        <div class="co-metric__label">Risk Level</div>
+        <div class="co-metric__risk" [style.color]="nciColor(company()!.nciGlobal)">
+          ⚠ {{ company()!.riskLevel.replace('_',' ') }}
+        </div>
+      </div>
+      <div class="card co-metric">
+        <div class="co-metric__label">Trend (30d)</div>
+        <div class="co-metric__trend" [class]="trendClass(trend())">
+          {{ trendIcon(trend()) }} {{ trend() }}
+        </div>
+      </div>
+    </div>
+
+    <!-- NCI Archive -->
+    <div class="card co-archive">
+      <div class="co-archive__header">
+        <div>
+          <div class="section-label">Archive de Cohérence — NCI History</div>
+        </div>
+        <div class="co-period-btns">
+          @for (p of periods; track p.months) {
+            <button class="period-btn" [class.period-btn--active]="period()===p.months" (click)="setPeriod(p.months)">
+              {{ p.label }}
+            </button>
+          }
+        </div>
+      </div>
+      @if (history().length === 0) {
+        <p class="co-empty">No history yet — SSE simulation generates data every 30s</p>
+      } @else {
+        <div class="co-history-list">
+          @for (h of history(); track h.id) {
+            <div class="co-history-row">
+              <span class="co-history-date mono">{{ h.recordedAt | date:'MMM d, HH:mm' }}</span>
+              <div class="co-history-track">
+                <div class="co-history-fill" [style.width.%]="h.nciValue*100" [style.background]="nciColor(h.nciValue)"></div>
+              </div>
+              <span class="co-history-val mono" [style.color]="nciColor(h.nciValue)">{{ (h.nciValue*100)|number:'1.1-1' }}</span>
+              <span class="co-history-reason">{{ h.reason }}</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- News -->
+    <div class="card co-news-card">
+      <div class="section-label" style="margin-bottom:14px">Breaking News</div>
+      @if (news().length === 0) {
+        <p class="co-empty">No news available</p>
+      }
+      @for (item of news(); track item.id) {
+        <div class="co-news-item">
+          <div class="co-news-top">
+            <span class="co-news-source mono">{{ item.source }}</span>
+            <span class="chip" [class]="'chip-'+newsClass(item.sentimentScore)">{{ newsLabel(item.sentimentScore) }}</span>
+          </div>
+          @if (item.url) {
+            <a class="co-news-title" [href]="item.url" target="_blank" rel="noopener">{{ item.title }} ↗</a>
+          } @else {
+            <p class="co-news-title">{{ item.title }}</p>
+          }
+          <div class="co-news-date mono">{{ item.publishedAt | date:'MMM d, HH:mm' }}</div>
+        </div>
+      }
+    </div>
+  }
+</div>

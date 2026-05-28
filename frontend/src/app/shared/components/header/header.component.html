@@ -1,0 +1,144 @@
+<header class="header">
+
+  <!-- Logo -->
+  <a routerLink="/discover" class="header__logo">
+    <div class="header__logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    </div>
+    <div class="header__logo-text">
+      <span class="header__logo-name">FinPulse</span>
+      <span class="header__logo-tag">AI</span>
+    </div>
+  </a>
+
+  <!-- Search -->
+  <div class="header__search-wrap">
+    <div class="header__search" [class.header__search--active]="searchOpen()">
+      <svg class="header__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input class="header__search-input" type="text" placeholder="Search company…"
+             [value]="searchQuery()"
+             (input)="onSearch($any($event.target).value)"
+             (blur)="searchOpen.set(false)"/>
+      @if (searchQuery()) {
+        <button class="header__search-clear" (mousedown)="clearSearch()">✕</button>
+      }
+    </div>
+    @if (searchOpen() && searchResults().length > 0) {
+      <div class="search-dropdown">
+        @for (c of searchResults(); track c.id) {
+          <button class="search-result" (mousedown)="goToCompany(c.id)">
+            <span class="search-result__ticker mono">{{ c.ticker }}</span>
+            <span class="search-result__name">{{ c.name }}</span>
+            <span class="nci-badge nci-{{ c.nciLabel.toLowerCase() }}">
+              {{ (c.nciGlobal * 100) | number:'1.0-0' }}
+            </span>
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Navigation -->
+  <nav class="header__nav">
+    @for (link of navLinks; track link.path) {
+      <a [routerLink]="link.path" routerLinkActive="header__nav-link--active"
+         class="header__nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="link.icon"/>
+        </svg>
+        <span class="header__nav-label">{{ link.label }}</span>
+        @if (link.path === '/notifications' && alerts.unreadCount() > 0) {
+          <span class="header__nav-badge unread-badge">
+            {{ alerts.unreadCount() > 99 ? '99+' : alerts.unreadCount() }}
+          </span>
+        }
+      </a>
+    }
+  </nav>
+
+  <!-- Actions -->
+  <div class="header__actions">
+
+    <!-- ── Theme Toggle ─────────────────────────────────────────── -->
+    <button
+      class="theme-toggle"
+      [class.theme-toggle--light]="theme.isLight()"
+      [title]="theme.themeLabel()"
+      (click)="theme.toggle()"
+      aria-label="Toggle theme">
+      <div class="theme-toggle__track">
+        <div class="theme-toggle__thumb">
+          @if (theme.isDark()) {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+            </svg>
+          } @else {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+          }
+        </div>
+      </div>
+    </button>
+
+    <!-- ── User menu ────────────────────────────────────────────── -->
+    <div class="header__user" (click)="toggleUserMenu()" (clickOutside)="closeUserMenu()">
+      <div class="header__avatar">
+        @if (avatarUrl()) {
+          <img [src]="avatarUrl()!" alt="avatar" class="header__avatar-img"/>
+        } @else {
+          {{ auth.initials() }}
+        }
+      </div>
+      <div class="header__user-info">
+        <span class="header__user-name">{{ auth.username() }}</span>
+        <span class="header__user-type" [class]="profileClass()">{{ profileLabel() }}</span>
+      </div>
+      <svg class="header__chevron" [class.header__chevron--open]="userMenuOpen()"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+
+      @if (userMenuOpen()) {
+        <div class="user-dropdown" (click)="$event.stopPropagation()">
+          <div class="user-dropdown__header">
+            <div class="user-dropdown__name">{{ auth.username() }}</div>
+            <div class="user-dropdown__email">{{ auth.email() }}</div>
+            <div class="user-dropdown__profile-badge" [class]="profileClass()">{{ profileLabel() }}</div>
+          </div>
+          <div class="user-dropdown__divider"></div>
+          <a routerLink="/profile"   class="user-dropdown__item" (click)="closeUserMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>Profile
+          </a>
+          <a routerLink="/strategies" class="user-dropdown__item" (click)="closeUserMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m14 0v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6"/>
+            </svg>My Strategies
+          </a>
+          <div class="user-dropdown__divider"></div>
+          <button class="user-dropdown__item user-dropdown__logout" (click)="logout()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>Sign out
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+
+</header>
