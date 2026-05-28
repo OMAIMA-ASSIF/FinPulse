@@ -41,11 +41,21 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
-SPRING_AI_BASE_URL = os.getenv("SPRING_AI_BASE_URL", "http://localhost:8080")
-SPRING_AI_EXPLAIN_ENDPOINT = os.getenv(
-    "SPRING_AI_EXPLAIN_ENDPOINT", "/api/v1/explain"
-)
-SPRING_AI_TIMEOUT_SECONDS = int(os.getenv("SPRING_AI_TIMEOUT_SECONDS", "30"))
+def _spring_ai_base_url() -> str:
+    return (
+        os.getenv("SPRING_AI_BASE_URL")
+        or os.getenv("SPRING_AI_SERVICE_URL")
+        or "http://localhost:8081"
+    )
+
+
+def _spring_ai_explain_endpoint() -> str:
+    """Endpoint pour ExplicabilityEngine (payload prompt V1)."""
+    return os.getenv("SPRING_AI_EXPLAIN_ENDPOINT", "/api/v1/explain")
+
+
+def _spring_ai_timeout_seconds() -> int:
+    return int(os.getenv("SPRING_AI_TIMEOUT_SECONDS", "30"))
 
 # Mistral API (fallback direct si Spring AI indisponible)
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
@@ -58,6 +68,60 @@ RISK_LEVELS = {
     (0.50, 0.75): "high",
     (0.75, 1.01): "critical",
 }
+
+
+def _extract_json_from_text(text: str) -> dict[str, Any] | None:
+    """Parse JSON pur ou contenu dans un bloc markdown ```json ... ```."""
+    if not text or not isinstance(text, str):
+        return None
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _normalize_llm_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    """
+    Unifie la réponse Spring/Mistral : parfois le JSON est imbriqué dans
+    summary (échec parse Java ou markdown).
+    """
+    if not isinstance(raw, dict):
+        return {}
+
+    summary = raw.get("summary")
+    if isinstance(summary, str):
+        nested = _extract_json_from_text(summary)
+        if nested:
+            return nested
+
+    if raw.get("key_drivers") or raw.get("recommended_actions"):
+        return raw
+
+    # Champ unique "content" (format alternatif)
+    content = raw.get("content")
+    if isinstance(content, str):
+        nested = _extract_json_from_text(content)
+        if nested:
+            return nested
+
+    return raw
+
+
+def _sector_comparison_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return str(value.get("text") or value.get("summary") or json.dumps(value, ensure_ascii=False))
+    return str(value) if value is not None else ""
 
 
 # ============================================================================
@@ -484,24 +548,36 @@ class ExplicabilityEngine:
     def _step5_call_spring_ai(
         self, prompt_payload: dict[str, Any]
     ) -> dict[str, Any] | None:
-        url = f"{SPRING_AI_BASE_URL}{SPRING_AI_EXPLAIN_ENDPOINT}"
+        url = f"{_spring_ai_base_url()}{_spring_ai_explain_endpoint()}"
         try:
             response = requests.post(
                 url,
                 json=prompt_payload,
-                timeout=SPRING_AI_TIMEOUT_SECONDS,
+                timeout=_spring_ai_timeout_seconds(),
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
-            return response.json()
+            try:
+                return response.json()
+            except ValueError:
+                logger.error(
+                    "Spring AI returned non-JSON from %s (HTTP %s): %s",
+                    url,
+                    response.status_code,
+                    (response.text or "")[:300],
+                )
+                return None
         except requests.exceptions.ConnectionError:
             logger.warning("Spring AI unreachable at %s — using fallback", url)
             return None
         except requests.exceptions.Timeout:
-            logger.warning("Spring AI timeout after %ds", SPRING_AI_TIMEOUT_SECONDS)
+            logger.warning(
+                "Spring AI timeout after %ds",
+                _spring_ai_timeout_seconds(),
+            )
             return None
         except Exception as exc:
-            logger.error("Spring AI call failed: %s", exc)
+            logger.error("Spring AI call failed (%s): %s", url, exc)
             return None
 
     # ────────────────────────────────────────────────────────────────────
@@ -537,7 +613,7 @@ class ExplicabilityEngine:
                     "max_tokens": 1024,
                     "response_format": {"type": "json_object"},
                 },
-                timeout=SPRING_AI_TIMEOUT_SECONDS,
+                timeout=_spring_ai_timeout_seconds(),
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {MISTRAL_API_KEY}",
@@ -577,14 +653,19 @@ class ExplicabilityEngine:
         sector_profile: SectorProfile,
     ) -> Explanation | None:
         try:
-            content = llm_response
-            # Si la réponse contient un champ 'content' (Spring AI format)
-            if isinstance(content, dict) and "content" in content:
-                raw = content["content"]
-                if isinstance(raw, str):
-                    content = json.loads(raw)
+            content = _normalize_llm_payload(llm_response)
+            if not content:
+                return None
 
             nci = filing_data.get("nci_global") or 0.0
+            key_drivers = content.get("key_drivers") or []
+            if not isinstance(key_drivers, list):
+                key_drivers = []
+
+            actions = content.get("recommended_actions") or []
+            if not isinstance(actions, list):
+                actions = [str(actions)] if actions else []
+
             return Explanation(
                 filing_id=filing_data["filing_id"],
                 company_id=filing_data["company_id"],
@@ -593,13 +674,13 @@ class ExplicabilityEngine:
                 nci_score=nci,
                 risk_level=_classify_risk(nci),
                 summary=str(content.get("summary", "")),
-                key_drivers=content.get("key_drivers", []),
+                key_drivers=key_drivers,
                 sector_comparison={
-                    "text": content.get("sector_comparison", ""),
+                    "text": _sector_comparison_text(content.get("sector_comparison")),
                     "sector_avg_nci": sector_profile.avg_nci,
                     "company_nci": nci,
                 },
-                recommended_actions=content.get("recommended_actions", []),
+                recommended_actions=actions,
                 confidence=0.85,
                 model_used="spring_ai",
             )
@@ -763,3 +844,49 @@ def _generate_recommended_actions(
         actions.append("Monitoring standard — pas d'action immédiate requise")
 
     return actions
+
+
+# ============================================================================
+# HTTP Client — Spring AI Integration
+# ============================================================================
+
+async def request_explanation(payload: dict) -> dict:
+    """
+    Envoie les paragraphes anormaux au service Spring AI et reçoit l'explication.
+    
+    Args:
+        payload: Dictionnaire contenant:
+            - ticker: Code boursier
+            - sector: Secteur
+            - filing_period: Période du filing
+            - paragraphs: Liste des paragraphes anormaux
+            - context: Contexte (language, task, etc.)
+    
+    Returns:
+        Dictionnaire avec explication et métadonnées
+        
+    Raises:
+        ConnectionError: Si Spring AI est indisponible
+        ValueError: Si la réponse n'est pas valide
+    """
+    import httpx
+    
+    url = f"{_spring_ai_base_url()}/api/explain/anomaly"
+
+    try:
+        async with httpx.AsyncClient(timeout=float(_spring_ai_timeout_seconds())) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.ConnectError as e:
+        logger.error(f"Failed to connect to Spring AI at {url}: {e}")
+        raise ConnectionError(f"Spring AI service unavailable at {url}") from e
+    except httpx.TimeoutException as e:
+        logger.error(
+            "Spring AI request timed out after %ss",
+            _spring_ai_timeout_seconds(),
+        )
+        raise TimeoutError(f"Spring AI request timed out") from e
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Spring AI returned error {e.response.status_code}: {e.response.text}")
+        raise ValueError(f"Spring AI error: {e.response.status_code}") from e

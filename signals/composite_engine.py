@@ -246,6 +246,66 @@ def compute_and_store_composite_signals(
     mark_signal_stage(filing, composite_scored=True, processing_status="composite_scored")
     filing.last_error_message = None
 
+    # ────────────────────────────────────────────────────────────────────────
+    # SENTINEL: Quality checks before publication
+    # ────────────────────────────────────────────────────────────────────────
+    from signals.score_quality import run_sentinel_checks, compute_signal_coverage, compute_average_confidence
+    
+    if nci_row is not None and nci_row.signal_value is not None:
+        # Extract quality dimensions
+        nci_normalized = float(nci_row.signal_value)
+        coverage_ratio = _safe_float(nci_detail.get("coverage_ratio")) or 0.6
+        
+        # Compute average confidence from signal layers
+        effective_inputs_dict = effective_inputs if isinstance(effective_inputs, dict) else {}
+        avg_confidence = compute_average_confidence(effective_inputs_dict) if effective_inputs_dict else 0.5
+        
+        # Get previous NCI score for delta calculation
+        previous_nci = None
+        try:
+            from signals.nci_repo import get_previous_nci_score
+            previous_nci = get_previous_nci_score(db, company_id=filing.company_id)
+        except Exception:
+            previous_nci = None
+        
+        # Signal details for ITA check
+        signal_details = {
+            "ita": {
+                "sell_ratio": _safe_float(effective_inputs.get("insider_signal")) or 0.0,
+                "has_unplanned_sales": False,  # TODO: Get from insider_signal detail
+            }
+        }
+        
+        # Run sentinel checks
+        quality_report = run_sentinel_checks(
+            ticker=filing.company.ticker,
+            nci_value=nci_normalized,
+            confidence=avg_confidence,
+            coverage=coverage_ratio,
+            last_filing_date=filing.filed_on,
+            previous_nci=previous_nci,
+            signal_details=signal_details,
+        )
+        
+        # Store quality report in NCI detail
+        nci_detail["quality_grade"] = quality_report.quality_grade
+        nci_detail["quality_warnings"] = quality_report.warnings
+        nci_detail["quality_blocking"] = quality_report.blocking_issues
+        nci_detail["freshness_days"] = quality_report.freshness_days
+        nci_detail["score_publishable"] = quality_report.is_publishable()
+        nci_detail["confidence_avg"] = avg_confidence
+        
+        # Log quality assessment
+        import logging as log_module
+        logger = log_module.getLogger(__name__)
+        if not quality_report.is_publishable():
+            logger.warning(
+                f"NCI score for {filing.company.ticker} filing {filing.id} blocked: "
+                f"{quality_report.blocking_issues}"
+            )
+        if quality_report.warnings:
+            logger.info(f"NCI quality warnings: {quality_report.warnings}")
+
     log_event(
         db,
         event_type="composite_scored",

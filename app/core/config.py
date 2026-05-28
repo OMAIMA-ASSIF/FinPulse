@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     mistral_embedding_model: str = "mistral-embed"
     mistral_api_base: str = "https://api.mistral.ai"
     embedding_request_timeout_sec: float = 60.0
+    
+    # ── Spring AI (Explicability) ──────────────────────────────────────────
+    spring_ai_service_url: str = "http://localhost:8081"
+    spring_ai_explain_endpoint: str = "/api/v1/explain"
+    spring_ai_timeout_seconds: int = 30
+    anthropic_api_key: str = ""
 
 
 @lru_cache
