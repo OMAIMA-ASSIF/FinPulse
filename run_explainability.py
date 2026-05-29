@@ -44,18 +44,28 @@ def main(argv: list[str] | None = None) -> int:
 
     from app.db.session import get_db
     from signals.explainability_client import ExplicabilityEngine
+    from signals.explainability_stage import run_explainability_stage
 
     parser = argparse.ArgumentParser(description="Run explainability for a filing")
     parser.add_argument("--filing-id", type=int, required=True, help="Filing ID to explain")
+    parser.add_argument(
+        "--persist-only",
+        action="store_true",
+        help="Utilise le stage pipeline (persist dans nci_global.detail)",
+    )
     args = parser.parse_args(argv)
 
     filing_id = args.filing_id
 
     try:
         with get_db() as db:
-            engine = ExplicabilityEngine(db)
-            explanation = engine.explain(filing_id=filing_id)
-            print(json.dumps(explanation.to_dict(), ensure_ascii=False, indent=2))
+            if args.persist_only:
+                result = run_explainability_stage(filing_id, db)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                engine = ExplicabilityEngine(db)
+                explanation = engine.explain(filing_id=filing_id)
+                print(json.dumps(explanation.to_dict(), ensure_ascii=False, indent=2))
         return 0
     except Exception as exc:
         logger.exception("Explainability run failed: %s", exc)
