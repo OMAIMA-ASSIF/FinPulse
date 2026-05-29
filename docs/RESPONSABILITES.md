@@ -1,7 +1,7 @@
 # FinPulse — Responsabilités & fonctionnement détaillé
 
 > Document de référence (PI3) : Sector Autoencoder, Convergence triplet, Explicabilité, Sentinel / Score Quality.  
-> Dernière mise à jour : corrections pipeline unifiée + persistance qualité NCI.
+
 
 ---
 
@@ -340,14 +340,6 @@ curl "http://localhost:8000/api/v1/embeddings/AAPL/anomalies?filing_id=42"
 curl "http://localhost:8000/api/v1/signals/AAPL/quality?filing_id=42"
 ```
 
----
-
-## 10. Prochaines évolutions (optionnel)
-
-- Projet **Spring Boot** `finpulse-explainer/` pour explications ciblées par paragraphes anormaux.
-- Colonnes dédiées `quality_grade` sur `nci_scores` (au lieu du seul JSON).
-- Tests E2E pipeline avec SQLite + filing fixture complet.
-- Brancher `signals/sentinel.py` (filtre 10b5-1) dans le calcul ITA du composite.
 
 ---
 
