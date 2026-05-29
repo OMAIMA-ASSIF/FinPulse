@@ -26,6 +26,7 @@ from signals.section_signals import compute_and_store_section_signals
 from signals.sector_autoencoder import compute_embeddings_anomaly_scores
 from signals.sentiment_signals import compute_and_store_sentiment_signals
 from signals.xbrl_signals import compute_and_store_xbrl_signals
+from signals.explainability_stage import run_explainability_stage
 
 logger = logging.getLogger("pipelines.signals_pipeline")
 
@@ -172,6 +173,17 @@ def _run_all_signals_inner(
                 processing_status=filing.processing_status,
             ).to_dict()
         )
+
+    explain_result = run_explainability_stage(filing.id, db)
+    stage_summaries.append(
+        StageRunSummary(
+            stage="explainability",
+            signal_count=0,
+            signal_names=[],
+            not_available=[],
+            processing_status=str(explain_result.get("status", "skipped")),
+        ).to_dict()
+    )
 
     filing.processing_status = "signal_scored"
     filing.last_error_message = None
