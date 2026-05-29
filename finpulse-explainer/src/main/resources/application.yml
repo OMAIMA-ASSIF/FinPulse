@@ -1,0 +1,20 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: finpulse-explainability
+  # Charge FinPulse/.env quand on lance depuis spring-ai-service (mvn spring-boot:run)
+  config:
+    import: optional:file:../.env[.properties]
+  ai:
+    mistralai:
+      api-key: ${MISTRAL_API_KEY:}
+      chat:
+        options:
+          model: ${MISTRAL_CHAT_MODEL:mistral-small-latest}
+          temperature: 0.3
+
+logging:
+  level:
+    com.finpulse: INFO
