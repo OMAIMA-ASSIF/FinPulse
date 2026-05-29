@@ -34,7 +34,6 @@ from signals.numeric_signals import (
     compute_and_store_numeric_signals,
     compute_numeric_signals,
 )
-from signals.sector_autoencoder import SuspectParagraph
 from signals.sentinel import (
     ScoreQuality,
     SentinelAlert,
@@ -97,4 +96,12 @@ __all__ = [
     "upsert_nci_score",
     "upsert_signal_scores",
 ]
+
+
+def __getattr__(name: str):
+    if name == "SuspectParagraph":
+        from signals.sector_autoencoder import SuspectParagraph
+
+        return SuspectParagraph
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

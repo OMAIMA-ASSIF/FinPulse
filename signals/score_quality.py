@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +188,8 @@ def run_sentinel_checks(
 
 
 def compute_signal_coverage(
-    signal_layers: dict[str, dict],
-    required_layers: list[str],
+    signal_layers: Dict[str, dict],
+    required_layers: List[str],
 ) -> float:
     """
     Calcule le ratio de couverture des signaux.
@@ -212,25 +212,45 @@ def compute_signal_coverage(
     return available / len(required_layers)
 
 
-def compute_average_confidence(
-    signal_layers: dict[str, dict],
-) -> float:
+def compute_average_confidence(signal_layers: Union[Dict[str, dict], List[float], List[dict]]) -> float:
     """
     Calcule la confiance moyenne entre tous les signaux disponibles.
+    Gère les cas où l'entrée est une liste de floats (erreur antérieure).
     
     Args:
-        signal_layers: Dictionnaire des signaux avec leurs confidences
+        signal_layers: Soit un dictionnaire {nom_signal: {..., "confidence": x}},
+                      soit une liste de dictionnaires,
+                      soit une liste de floats (auquel cas on retourne une valeur par défaut).
     
     Returns:
         Confiance moyenne [0, 1]
     """
-    confidences = [
-        signal.get("confidence", 0.5)
-        for signal in signal_layers.values()
-        if signal.get("signal_value") is not None
-    ]
+    # Cas 1 : liste de floats (bug déjà rencontré)
+    if isinstance(signal_layers, (list, tuple)) and all(isinstance(x, (int, float)) for x in signal_layers):
+        logger.warning("compute_average_confidence received list of floats instead of dict/list of dicts. Returning default 0.5")
+        return 0.5
     
-    if not confidences:
+    # Cas 2 : liste de dictionnaires (par ex. signaux collectés directement)
+    if isinstance(signal_layers, (list, tuple)):
+        confidences = [
+            sig.get("confidence", 0.5) for sig in signal_layers
+            if isinstance(sig, dict) and sig.get("signal_value") is not None
+        ]
+        if confidences:
+            return sum(confidences) / len(confidences)
         return 0.0
     
-    return sum(confidences) / len(confidences)
+    # Cas 3 : dictionnaire normal (signal_name -> dict)
+    if isinstance(signal_layers, dict):
+        confidences = [
+            signal.get("confidence", 0.5)
+            for signal in signal_layers.values()
+            if isinstance(signal, dict) and signal.get("signal_value") is not None
+        ]
+        if confidences:
+            return sum(confidences) / len(confidences)
+        return 0.0
+    
+    # Fallback
+    logger.warning(f"compute_average_confidence received unexpected type: {type(signal_layers)}. Returning 0.5")
+    return 0.5

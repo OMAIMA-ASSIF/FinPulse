@@ -83,6 +83,15 @@ def compute_behavior_signals(
             insider_signal_value,
             {
                 "ita": ita_value,
+                "sell_ratio": float(ita_components.get("weighted_ita") or ita_value),
+                "weighted_ita": float(ita_components.get("weighted_ita") or ita_value),
+                "opportunistic_sell_value": float(
+                    ita_components.get("opportunistic_sell_value") or 0.0
+                ),
+                "has_opportunistic_sales": float(
+                    ita_components.get("opportunistic_sell_value") or 0.0
+                )
+                > 0.0,
                 "insider_concentration": concentration_value,
                 "governance_penalty": governance_penalty,
             },

@@ -123,6 +123,8 @@ NCI_CRITICAL_LAYER_SIGNALS = {
     ),
     "behavior": ("insider_signal",),
 }
+# Boost appliqué au NCI global : uniquement CONVERGENCE_TRIPLET (triplet_convergence_signal).
+# CONVERGENCE_TIERS / convergence_signal = indicateur multi-couches (diagnostic, non ajouté au NCI).
 CONVERGENCE_TRIPLET = {
     "rlds_threshold": 0.25,
     "forward_pessimism_threshold": 0.25,

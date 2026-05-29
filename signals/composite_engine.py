@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.models.filing import Filing
 from app.db.models.signal_score import SignalScore
@@ -118,6 +119,7 @@ def compute_composite_signals(
         signal_name: resolution.value
         for signal_name, resolution in resolved_inputs.items()
     }
+    _enrich_triplet_context(signal_values, resolved_inputs)
 
     divergence = _build_divergence_signal(
         filing=filing,
@@ -143,6 +145,7 @@ def compute_composite_signals(
         model_version=model_version,
         signal_values=signal_values,
         convergence=convergence,
+        triplet_convergence=triplet_convergence,
         input_resolutions=resolved_inputs,
     )
     composite_alias = _build_alias_signal(
@@ -195,6 +198,13 @@ def compute_and_store_composite_signals(
     signal_rows_by_name = {row.signal_name: row for row in stored_rows}
     nci_row = signal_rows_by_name.get("nci_global")
     convergence_row = signal_rows_by_name.get("convergence_signal")
+    triplet_row = signal_rows_by_name.get("triplet_convergence_signal")
+    insider_rows = load_signal_rows_by_name(
+        db,
+        filing_id=filing_id,
+        signal_names=("insider_signal",),
+    )
+    insider_row = insider_rows.get("insider_signal")
 
     if nci_row is not None and nci_row.signal_value is not None:
         nci_detail = nci_row.detail if isinstance(nci_row.detail, dict) else {}
@@ -219,8 +229,16 @@ def compute_and_store_composite_signals(
             event_type=_infer_nci_event_type(filing),
             fiscal_year=filing.fiscal_year,
             fiscal_quarter=filing.fiscal_quarter,
-            convergence_tier=str(convergence_detail.get("tier") or "none"),
-            layers_elevated=_safe_int(convergence_detail.get("layers_elevated")),
+            convergence_tier=str(
+                (triplet_row.detail or {}).get("triplet_confidence")
+                if triplet_row is not None and isinstance(triplet_row.detail, dict)
+                else convergence_detail.get("tier") or "none"
+            ),
+            layers_elevated=_safe_int(
+                (triplet_row.detail or {}).get("triplet_signals_elevated")
+                if triplet_row is not None and isinstance(triplet_row.detail, dict)
+                else convergence_detail.get("layers_elevated")
+            ),
             confidence=confidence_label,
             coverage_ratio=coverage_ratio_value,
             signal_text=_safe_float(effective_inputs.get("rlds")),
@@ -268,13 +286,7 @@ def compute_and_store_composite_signals(
         except Exception:
             previous_nci = None
         
-        # Signal details for ITA check
-        signal_details = {
-            "ita": {
-                "sell_ratio": _safe_float(effective_inputs.get("insider_signal")) or 0.0,
-                "has_unplanned_sales": False,  # TODO: Get from insider_signal detail
-            }
-        }
+        signal_details = {"ita": _ita_context_from_insider_row(insider_row)}
         
         # Run sentinel checks
         quality_report = run_sentinel_checks(
@@ -282,7 +294,7 @@ def compute_and_store_composite_signals(
             nci_value=nci_normalized,
             confidence=avg_confidence,
             coverage=coverage_ratio,
-            last_filing_date=filing.filed_on,
+            last_filing_date=_filing_reference_date(filing),
             previous_nci=previous_nci,
             signal_details=signal_details,
         )
@@ -305,6 +317,10 @@ def compute_and_store_composite_signals(
             )
         if quality_report.warnings:
             logger.info(f"NCI quality warnings: {quality_report.warnings}")
+
+        nci_row.detail = dict(nci_detail)
+        flag_modified(nci_row, "detail")
+        db.flush()
 
     log_event(
         db,
@@ -544,6 +560,66 @@ def _build_triplet_convergence_signal(
         },
     )
 
+def _enrich_triplet_context(
+    signal_values: dict[str, Any],
+    resolved_inputs: dict[str, ResolvedSignalInput],
+) -> None:
+    """Injecte confiance moyenne et timestamps pour le triplet convergence."""
+    confidences = [
+        float(resolution.confidence)
+        for resolution in resolved_inputs.values()
+        if resolution.confidence is not None
+    ]
+    signal_values["_overall_confidence"] = (
+        sum(confidences) / len(confidences) if confidences else 0.0
+    )
+
+    timestamps: dict[str, Any] = {}
+    for name in ("rlds", "forward_pessimism", "insider_signal"):
+        resolution = resolved_inputs.get(name)
+        if resolution is None or resolution.source_row is None:
+            continue
+        computed_at = resolution.source_row.computed_at
+        if computed_at is not None:
+            timestamps[name] = computed_at
+    signal_values["_signal_timestamps"] = timestamps
+
+
+def _ita_context_from_insider_row(insider_row: SignalScore | None) -> dict[str, Any]:
+    if insider_row is None or not isinstance(insider_row.detail, dict):
+        return {"sell_ratio": 0.0, "has_unplanned_sales": False}
+
+    detail = insider_row.detail
+    components = detail.get("component_scores")
+    if isinstance(components, dict):
+        sell_ratio = _safe_float(components.get("sell_ratio"))
+        if sell_ratio is None:
+            sell_ratio = _safe_float(components.get("ita")) or _safe_float(components.get("weighted_ita"))
+        has_unplanned = components.get("has_opportunistic_sales")
+        if has_unplanned is None:
+            has_unplanned = bool(components.get("opportunistic_sell_value", 0) > 0)
+        return {
+            "sell_ratio": float(sell_ratio or 0.0),
+            "has_unplanned_sales": bool(has_unplanned),
+        }
+
+    return {
+        "sell_ratio": _safe_float(insider_row.signal_value) or 0.0,
+        "has_unplanned_sales": False,
+    }
+
+
+def _filing_reference_date(filing: Filing) -> datetime:
+    filed_at = getattr(filing, "filed_at", None) or getattr(filing, "filed_on", None)
+    if filed_at is None:
+        return datetime.now(timezone.utc)
+    if isinstance(filed_at, datetime):
+        if filed_at.tzinfo is None:
+            return filed_at.replace(tzinfo=timezone.utc)
+        return filed_at
+    return datetime.combine(filed_at, datetime.min.time(), tzinfo=timezone.utc)
+
+
 def _build_nci_signal(
     *,
     db: Session,
@@ -551,6 +627,7 @@ def _build_nci_signal(
     model_version: str,
     signal_values: dict[str, float | None],
     convergence: ComputedCompositeSignal,
+    triplet_convergence: ComputedCompositeSignal,
     input_resolutions: dict[str, ResolvedSignalInput],
 ) -> ComputedCompositeSignal:
     definition = get_signal_definition("nci_global")
@@ -634,7 +711,7 @@ def _build_nci_signal(
         if available_weight >= TOTAL_DECLARED_NCI_WEIGHT
         else ((weighted_sum / available_weight) * TOTAL_DECLARED_NCI_WEIGHT)
     )
-    convergence_boost = float(convergence.signal_value or 0.0)
+    convergence_boost = float(triplet_convergence.signal_value or 0.0)
     raw_total = raw_score + convergence_boost
     normalization = _normalize_nci_value(
         db,
@@ -666,13 +743,20 @@ def _build_nci_signal(
         current_filing_id=filing.id,
     )["value"])
 
+    triplet_meta = triplet_convergence.detail if isinstance(triplet_convergence.detail, dict) else {}
     triplet_detail = {
         "convergence_boost_applied": convergence_boost > 0,
-        "convergence_tier": convergence.detail.get("tier", "none"),
+        "convergence_tier": triplet_meta.get("triplet_confidence", "none"),
         "triplet_signals_fired": triplet_signals_fired,
         "boost_value": convergence_boost,
         "pre_boost_nci": round(pre_boost_nci, 4),
         "post_boost_nci": round(boosted_score, 4),
+        "within_temporal_window": triplet_meta.get("within_temporal_window"),
+        "multi_layer_convergence_tier": (
+            convergence.detail.get("tier", "none")
+            if isinstance(convergence.detail, dict)
+            else "none"
+        ),
     }
     confidence_scores = []
     for name in active_weights:
@@ -717,7 +801,9 @@ def _build_nci_signal(
             "raw_score": raw_score,
             "raw_total_before_normalization": raw_total,
             "convergence_boost": convergence_boost,
+            "nci_boost_source": "triplet_convergence_signal",
             "triplet_boost_detail": triplet_detail,
+            "multi_layer_convergence_boost": float(convergence.signal_value or 0.0),
             "normalization_method": normalization["method"],
             "normalization_reference_count": normalization["history_count"],
             "normalization_mean": normalization.get("mean"),

@@ -202,6 +202,42 @@ class ExplicabilityEngine:
     def __init__(self, db: Session):
         self.db = db
 
+    def explain_and_persist(self, filing_id: int) -> dict[str, Any]:
+        """
+        Génère l'explication et la stocke dans signal_scores (nci_global.detail).
+        """
+        from sqlalchemy.orm.attributes import flag_modified
+
+        explanation = self.explain(filing_id=filing_id)
+        nci_row = self.db.scalar(
+            select(SignalScore).where(
+                SignalScore.filing_id == filing_id,
+                SignalScore.signal_name == "nci_global",
+            )
+        )
+        if nci_row is None:
+            raise RuntimeError(f"nci_global signal not found for filing {filing_id}")
+
+        detail = dict(nci_row.detail) if isinstance(nci_row.detail, dict) else {}
+        detail["llm_explanation"] = explanation.summary
+        detail["llm_explanation_meta"] = {
+            "risk_level": explanation.risk_level,
+            "confidence": explanation.confidence,
+            "model_used": explanation.model_used,
+            "key_drivers": explanation.key_drivers,
+            "recommended_actions": explanation.recommended_actions,
+            "generated_at": explanation.generated_at.isoformat(),
+        }
+        nci_row.detail = detail
+        flag_modified(nci_row, "detail")
+        self.db.flush()
+
+        return {
+            "model_used": explanation.model_used,
+            "risk_level": explanation.risk_level,
+            "summary_preview": explanation.summary[:200] if explanation.summary else "",
+        }
+
     def explain(self, filing_id: int) -> Explanation:
         """Point d'entrée principal — exécute les 7 étapes."""
 
