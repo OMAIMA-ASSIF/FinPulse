@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     spring_ai_explain_endpoint: str = "/api/v1/explain"
     spring_ai_timeout_seconds: int = 30
     anthropic_api_key: str = ""
+    pipeline_explain_enabled: bool = True
 
 
 @lru_cache

@@ -103,6 +103,20 @@ class ScoreResponse(BaseModel):
     scored_at: datetime | None
 
 
+class QualityResponse(BaseModel):
+    ticker: str
+    filing_id: int
+    nci_value: float | None
+    quality_grade: str | None
+    score_publishable: bool
+    freshness_days: int | None
+    coverage_ratio: float | None
+    nci_delta: float | None
+    confidence_avg: float | None
+    warnings: list[str]
+    blocking_issues: list[str]
+
+
 class SignalHistoryPoint(BaseModel):
     filing_id: int
     accession_number: str
