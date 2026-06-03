@@ -62,6 +62,7 @@ class NewsItem(BaseModel):
 
 
 class CompanyIdentity(BaseModel):
+    id: int
     name: str
     ticker: str
     cik: str
@@ -87,6 +88,7 @@ class EmbeddingRow(BaseModel):
 
 
 class ScoreResponse(BaseModel):
+    company_id: int
     ticker: str
     company_name: str
     sector: str | None
@@ -101,6 +103,20 @@ class ScoreResponse(BaseModel):
     recent_news: list[NewsItem]
     data_freshness: dict[str, int | None]
     scored_at: datetime | None
+
+
+class QualityResponse(BaseModel):
+    ticker: str
+    filing_id: int
+    nci_value: float | None
+    quality_grade: str | None
+    score_publishable: bool
+    freshness_days: int | None
+    coverage_ratio: float | None
+    nci_delta: float | None
+    confidence_avg: float | None
+    warnings: list[str]
+    blocking_issues: list[str]
 
 
 class SignalHistoryPoint(BaseModel):

@@ -1,0 +1,73 @@
+<div class="metrics card fade-up">
+  <div class="section-label">Key Metrics</div>
+  <div class="metrics__grid">
+
+    <!-- NCI Global -->
+    <div class="metric-card">
+      <div class="metric-card__label">NCI Global</div>
+      <div class="metric-card__value mono" [style.color]="nciColor(company.nciGlobal)">
+        {{ (company.nciGlobal * 100) | number:'1.1-1' }}
+      </div>
+      <div class="metric-card__bar">
+        <div class="metric-card__bar-fill"
+             [style.width.%]="company.nciGlobal * 100"
+             [style.background]="nciColor(company.nciGlobal)">
+        </div>
+      </div>
+      <span class="nci-badge nci-{{ company.nciLabel.toLowerCase() }}">
+        {{ company.nciLabel }}
+      </span>
+    </div>
+
+    <!-- Personalized NCI (shown only if strategy exists) -->
+    @if (personalizedNci !== null) {
+      <div class="metric-card metric-card--personalized">
+        <div class="metric-card__label">
+          <span class="live-dot" style="width:5px;height:5px"></span>
+          Your NCI
+        </div>
+        <div class="metric-card__value mono" [style.color]="nciColor(personalizedNci)">
+          {{ (personalizedNci * 100) | number:'1.1-1' }}
+        </div>
+        <div class="metric-card__bar">
+          <div class="metric-card__bar-fill"
+               [style.width.%]="personalizedNci * 100"
+               [style.background]="nciColor(personalizedNci)">
+          </div>
+        </div>
+        <span class="metric-card__personalized-tag">Personalized</span>
+      </div>
+    }
+
+    <!-- Sentiment -->
+    <div class="metric-card">
+      <div class="metric-card__label">Sentiment</div>
+      <div class="metric-card__value mono" [style.color]="sentimentColor(company.sentimentAvg)">
+        {{ company.sentimentAvg | number:'1.2-2' }}
+      </div>
+      <div class="metric-card__bar">
+        <div class="metric-card__bar-fill"
+             [style.width.%]="sentimentBarPct(company.sentimentAvg)"
+             [style.background]="sentimentColor(company.sentimentAvg)">
+        </div>
+      </div>
+      <span class="metric-card__tag"
+            [style.color]="sentimentColor(company.sentimentAvg)">
+        News Sentiment
+      </span>
+    </div>
+
+    <!-- Risk Level -->
+    <div class="metric-card">
+      <div class="metric-card__label">Risk Level</div>
+      <div class="metric-card__risk" [style.color]="riskColor(company.riskLevel)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        {{ riskLabel(company.riskLevel) }}
+      </div>
+    </div>
+
+  </div>
+</div>

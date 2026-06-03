@@ -1,0 +1,78 @@
+services:
+  # PostgreSQL
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: finpulse_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: Finpulse-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: '3125'
+    volumes:
+      # Named volume only — avoid bind-mounting files from the host path (breaks on Windows
+      # when the project path contains spaces or apostrophes, e.g. "projet d'innovation").
+      # Schema is created by Hibernate (spring.jpa.hibernate.ddl-auto=update).
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - finpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: finpulse_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - finpulse-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Spring Boot
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finpulse_backend
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/Finpulse-db
+      - SPRING_DATA_REDIS_HOST=redis
+      # Allow the backend to download JWKS from Keycloak via the host network
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://host.docker.internal:9090/realms/finpulse/protocol/openid-connect/certs
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://localhost:9090/realms/finpulse
+      # Keycloak client config (to talk to Keycloak admin API)
+      - KEYCLOAK_SERVER_URL=http://host.docker.internal:9090
+      - P1_API_URL=http://host.docker.internal:8000
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - finpulse-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+
+networks:
+  finpulse-network:
+    driver: bridge

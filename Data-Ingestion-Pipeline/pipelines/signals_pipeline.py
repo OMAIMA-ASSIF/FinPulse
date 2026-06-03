@@ -23,8 +23,10 @@ from signals.composite_signals import compute_and_store_composite_signals
 from signals.insider_signals import compute_and_store_insider_signals
 from signals.market_signals import compute_and_store_market_signals
 from signals.section_signals import compute_and_store_section_signals
+from signals.sector_autoencoder import compute_embeddings_anomaly_scores
 from signals.sentiment_signals import compute_and_store_sentiment_signals
 from signals.xbrl_signals import compute_and_store_xbrl_signals
+from signals.explainability_stage import run_explainability_stage
 
 logger = logging.getLogger("pipelines.signals_pipeline")
 
@@ -105,6 +107,23 @@ def run_all_signals(
         raise
 
 
+def _run_autoencoder_stage(*, filing_id: int, db: Session) -> StageRunSummary:
+    try:
+        compute_embeddings_anomaly_scores(db, filing_id, commit=True)
+        logger.info("Autoencoder embeddings scored for filing %d", filing_id)
+        status = "scored"
+    except Exception as exc:
+        logger.warning("Autoencoder stage skipped for filing %d: %s", filing_id, exc)
+        status = "skipped"
+    return StageRunSummary(
+        stage="autoencoder",
+        signal_count=0,
+        signal_names=[],
+        not_available=[],
+        processing_status=status,
+    )
+
+
 def _run_all_signals_inner(
     *,
     filing_id: int,
@@ -130,6 +149,9 @@ def _run_all_signals_inner(
 
     stage_summaries: list[dict[str, Any]] = []
 
+    # ÉTAPE 1: scorer les embeddings avant les signal stages
+    stage_summaries.append(_run_autoencoder_stage(filing_id=filing.id, db=db).to_dict())
+
     for stage_name, runner in SIGNAL_STAGES:
         logger.info("Running %s signals for filing %d", stage_name, filing.id)
 
@@ -151,6 +173,17 @@ def _run_all_signals_inner(
                 processing_status=filing.processing_status,
             ).to_dict()
         )
+
+    explain_result = run_explainability_stage(filing.id, db)
+    stage_summaries.append(
+        StageRunSummary(
+            stage="explainability",
+            signal_count=0,
+            signal_names=[],
+            not_available=[],
+            processing_status=str(explain_result.get("status", "skipped")),
+        ).to_dict()
+    )
 
     filing.processing_status = "signal_scored"
     filing.last_error_message = None

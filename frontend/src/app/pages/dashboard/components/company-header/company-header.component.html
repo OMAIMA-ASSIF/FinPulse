@@ -1,0 +1,13 @@
+<div class="co-header card fade-up">
+  <div class="co-header__logo">{{ company.ticker.slice(0,2) }}</div>
+  <div class="co-header__info">
+    <h1 class="co-header__name display">{{ company.name }}</h1>
+    <div class="co-header__meta">
+      <span class="co-header__ticker mono">{{ company.ticker }}</span>
+      <span class="co-header__dot">·</span>
+      <span class="co-header__sector">{{ company.sector }}</span>
+      <span class="co-header__dot">·</span>
+      <span class="co-header__updated">Updated {{ company.lastUpdate | date:'HH:mm:ss' }}</span>
+    </div>
+  </div>
+</div>

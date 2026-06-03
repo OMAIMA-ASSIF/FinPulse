@@ -2,14 +2,14 @@ services:
 
   db:
     image: pgvector/pgvector:pg16
-    container_name: finpulse_db
+    container_name: pgvector_ingestion
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-finpulse}
       POSTGRES_USER: ${POSTGRES_USER:-finpulse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finpulse_secret}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,10 +20,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: finpulse_redis
+    container_name: redis_ingestion
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -35,7 +35,7 @@ services:
 
   adminer:
     image: adminer:latest
-    container_name: finpulse_adminer
+    container_name: adminer_ingestion
     restart: unless-stopped
     ports:
       - "8080:8080"

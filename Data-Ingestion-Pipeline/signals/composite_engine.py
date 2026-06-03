@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.models.filing import Filing
 from app.db.models.signal_score import SignalScore
@@ -20,7 +21,9 @@ from signals.policies import (
     CARRY_FORWARD_LOOKBACK_FILINGS,
     CARRY_FORWARD_STALENESS_PENALTY,
     CONVERGENCE_THRESHOLDS,
+    CONVERGENCE_TEMPORAL_WINDOW_HOURS,
     CONVERGENCE_TIERS,
+    CONVERGENCE_TRIPLET,
     NCI_COVERAGE_HIGH,
     NCI_COVERAGE_MEDIUM,
     NCI_FIXED_MAX_EXPECTED_RAW,
@@ -116,6 +119,7 @@ def compute_composite_signals(
         signal_name: resolution.value
         for signal_name, resolution in resolved_inputs.items()
     }
+    _enrich_triplet_context(signal_values, resolved_inputs)
 
     divergence = _build_divergence_signal(
         filing=filing,
@@ -128,12 +132,20 @@ def compute_composite_signals(
         model_version=model_version,
         signal_values=signal_values,
     )
+
+    triplet_convergence = _build_triplet_convergence_signal(
+            filing=filing,
+            model_version=model_version,
+            signal_values=signal_values,
+        )
+
     nci_global = _build_nci_signal(
         db=db,
         filing=filing,
         model_version=model_version,
         signal_values=signal_values,
         convergence=convergence,
+        triplet_convergence=triplet_convergence,
         input_resolutions=resolved_inputs,
     )
     composite_alias = _build_alias_signal(
@@ -147,6 +159,7 @@ def compute_composite_signals(
     return [
         divergence.to_dict(),
         convergence.to_dict(),
+        triplet_convergence.to_dict(),
         nci_global.to_dict(),
         composite_alias.to_dict(),
     ]
@@ -185,6 +198,13 @@ def compute_and_store_composite_signals(
     signal_rows_by_name = {row.signal_name: row for row in stored_rows}
     nci_row = signal_rows_by_name.get("nci_global")
     convergence_row = signal_rows_by_name.get("convergence_signal")
+    triplet_row = signal_rows_by_name.get("triplet_convergence_signal")
+    insider_rows = load_signal_rows_by_name(
+        db,
+        filing_id=filing_id,
+        signal_names=("insider_signal",),
+    )
+    insider_row = insider_rows.get("insider_signal")
 
     if nci_row is not None and nci_row.signal_value is not None:
         nci_detail = nci_row.detail if isinstance(nci_row.detail, dict) else {}
@@ -209,8 +229,16 @@ def compute_and_store_composite_signals(
             event_type=_infer_nci_event_type(filing),
             fiscal_year=filing.fiscal_year,
             fiscal_quarter=filing.fiscal_quarter,
-            convergence_tier=str(convergence_detail.get("tier") or "none"),
-            layers_elevated=_safe_int(convergence_detail.get("layers_elevated")),
+            convergence_tier=str(
+                (triplet_row.detail or {}).get("triplet_confidence")
+                if triplet_row is not None and isinstance(triplet_row.detail, dict)
+                else convergence_detail.get("tier") or "none"
+            ),
+            layers_elevated=_safe_int(
+                (triplet_row.detail or {}).get("triplet_signals_elevated")
+                if triplet_row is not None and isinstance(triplet_row.detail, dict)
+                else convergence_detail.get("layers_elevated")
+            ),
             confidence=confidence_label,
             coverage_ratio=coverage_ratio_value,
             signal_text=_safe_float(effective_inputs.get("rlds")),
@@ -235,6 +263,64 @@ def compute_and_store_composite_signals(
 
     mark_signal_stage(filing, composite_scored=True, processing_status="composite_scored")
     filing.last_error_message = None
+
+    # ────────────────────────────────────────────────────────────────────────
+    # SENTINEL: Quality checks before publication
+    # ────────────────────────────────────────────────────────────────────────
+    from signals.score_quality import run_sentinel_checks, compute_signal_coverage, compute_average_confidence
+    
+    if nci_row is not None and nci_row.signal_value is not None:
+        # Extract quality dimensions
+        nci_normalized = float(nci_row.signal_value)
+        coverage_ratio = _safe_float(nci_detail.get("coverage_ratio")) or 0.6
+        
+        # Compute average confidence from signal layers
+        effective_inputs_dict = effective_inputs if isinstance(effective_inputs, dict) else {}
+        avg_confidence = compute_average_confidence(effective_inputs_dict) if effective_inputs_dict else 0.5
+        
+        # Get previous NCI score for delta calculation
+        previous_nci = None
+        try:
+            from signals.nci_repo import get_previous_nci_score
+            previous_nci = get_previous_nci_score(db, company_id=filing.company_id)
+        except Exception:
+            previous_nci = None
+        
+        signal_details = {"ita": _ita_context_from_insider_row(insider_row)}
+        
+        # Run sentinel checks
+        quality_report = run_sentinel_checks(
+            ticker=filing.company.ticker,
+            nci_value=nci_normalized,
+            confidence=avg_confidence,
+            coverage=coverage_ratio,
+            last_filing_date=_filing_reference_date(filing),
+            previous_nci=previous_nci,
+            signal_details=signal_details,
+        )
+        
+        # Store quality report in NCI detail
+        nci_detail["quality_grade"] = quality_report.quality_grade
+        nci_detail["quality_warnings"] = quality_report.warnings
+        nci_detail["quality_blocking"] = quality_report.blocking_issues
+        nci_detail["freshness_days"] = quality_report.freshness_days
+        nci_detail["score_publishable"] = quality_report.is_publishable()
+        nci_detail["confidence_avg"] = avg_confidence
+        
+        # Log quality assessment
+        import logging as log_module
+        logger = log_module.getLogger(__name__)
+        if not quality_report.is_publishable():
+            logger.warning(
+                f"NCI score for {filing.company.ticker} filing {filing.id} blocked: "
+                f"{quality_report.blocking_issues}"
+            )
+        if quality_report.warnings:
+            logger.info(f"NCI quality warnings: {quality_report.warnings}")
+
+        nci_row.detail = dict(nci_detail)
+        flag_modified(nci_row, "detail")
+        db.flush()
 
     log_event(
         db,
@@ -342,6 +428,196 @@ def _build_convergence_signal(
             "model_version": model_version,
         },
     )
+def _build_triplet_convergence_signal(
+    *,
+    filing: Filing,
+    model_version: str,
+    signal_values: dict[str, float | None],
+) -> ComputedCompositeSignal:
+    """
+    Surveille la convergence spécifique de 3 signaux clés:
+    RLDS (texte) + GCE/forward_pessimism (guidance) + ITA/insider_signal (insiders).
+
+    Logique AND avec fenêtre temporelle de 72h :
+    - Les 3 signaux doivent dépasser leurs seuils respectifs
+    - Les 3 doivent avoir été calculés dans un intervalle ≤ 72h
+
+    Formule du Convergence Boost :
+        Si 3/3 élevés → boost = 0.25 (boost_full)
+        Si 2/3 élevés → boost = 0.15 (boost_strong)
+        Si 1/3 élevés → boost = 0.0
+        Garde : boost = 0 si confiance globale < min_confidence_for_boost
+
+    Sources :
+        RLDS → signals.text_signals (Risk Lexical Drift Score, seuil: 0.25)
+        GCE  → signals.text_signals via forward_pessimism (Guidance Confidence Erosion, seuil: 0.25)
+        ITA  → signals.behavior_signals via insider_signal (Insider Transaction Asymmetry, seuil: 0.15)
+    """
+    from datetime import timedelta
+
+    definition = get_signal_definition("triplet_convergence_signal")
+
+    # ── Extraire les 3 signaux ──
+    rlds = signal_values.get("rlds")
+    forward_pessimism = signal_values.get("forward_pessimism")
+    insider_signal = signal_values.get("insider_signal")
+
+    # ── Seuils (depuis policies.py) ──
+    rlds_threshold              = CONVERGENCE_TRIPLET["rlds_threshold"]
+    forward_pessimism_threshold = CONVERGENCE_TRIPLET["forward_pessimism_threshold"]
+    insider_threshold           = CONVERGENCE_TRIPLET["ita_threshold"]
+
+    # ── Vérifier lesquels sont élevés ──
+    rlds_elevated = rlds is not None and rlds >= rlds_threshold
+    pessimism_elevated = forward_pessimism is not None and forward_pessimism >= forward_pessimism_threshold
+    insider_elevated = insider_signal is not None and insider_signal >= insider_threshold
+
+    # ── Vérification de la fenêtre temporelle 72h ──
+    temporal_window = timedelta(hours=CONVERGENCE_TEMPORAL_WINDOW_HOURS)
+    signal_timestamps = signal_values.get("_signal_timestamps", {})
+    rlds_ts = signal_timestamps.get("rlds")
+    pessimism_ts = signal_timestamps.get("forward_pessimism")
+    insider_ts = signal_timestamps.get("insider_signal")
+
+    timestamps_available = [ts for ts in [rlds_ts, pessimism_ts, insider_ts] if ts is not None]
+    within_temporal_window = True
+    if len(timestamps_available) >= 2:
+        ts_min = min(timestamps_available)
+        ts_max = max(timestamps_available)
+        within_temporal_window = (ts_max - ts_min) <= temporal_window
+
+    # ── Compter ──
+    count = sum([rlds_elevated, pessimism_elevated, insider_elevated])
+
+    # ── Calculer le boost ──
+    if count == 3 and within_temporal_window:
+        triplet_boost = CONVERGENCE_TRIPLET["boost_full"]
+        triplet_confidence = "full"
+    elif count == 2 and within_temporal_window:
+        triplet_boost = CONVERGENCE_TRIPLET["boost_strong"]
+        triplet_confidence = "strong"
+    elif count >= 2 and not within_temporal_window:
+        triplet_boost = 0.0
+        triplet_confidence = "blocked_temporal_window"
+    elif count == 1:
+        triplet_boost = 0.0
+        triplet_confidence = "weak"
+    else:
+        triplet_boost = 0.0
+        triplet_confidence = "none"
+
+    # ── Garde : ne pas booster si confiance globale trop faible ──
+    min_confidence = CONVERGENCE_TRIPLET["min_confidence_for_boost"]
+    overall_confidence = signal_values.get("_overall_confidence", 1.0)
+    if overall_confidence < min_confidence and triplet_boost > 0:
+        triplet_boost = 0.0
+        triplet_confidence = "blocked_low_confidence"
+
+    # ── Interprétation (gère tous les cas) ──
+    interpretation_map = {
+        "full": "Convergence maximale: anomalie texte + pessimisme guidance + ventes insiders",
+        "strong": "Convergence forte: 2 des 3 indicateurs présents",
+        "weak": "Convergence faible: 1 seul indicateur présent",
+        "none": "Aucune convergence: aucun indicateur élevé",
+        "blocked_low_confidence": "Boost bloqué: confiance globale insuffisante",
+        "blocked_temporal_window": f"Boost bloqué: signaux hors fenêtre {CONVERGENCE_TEMPORAL_WINDOW_HOURS}h",
+    }
+
+    # ── Construire le résultat ──
+    return ComputedCompositeSignal(
+        filing_id=filing.id,
+        company_id=filing.company_id,
+        signal_name="triplet_convergence_signal",
+        signal_value=triplet_boost,
+        model_version=model_version,
+        detail={
+            "description": definition.description if definition else "Triplet convergence signal",
+            "convergence_boost_formula": "boost = f(count, temporal_window, confidence)",
+            "signal_values": {
+                "rlds": rlds,
+                "forward_pessimism (GCE)": forward_pessimism,
+                "insider_signal (ITA)": insider_signal,
+            },
+            "thresholds": {
+                "rlds": rlds_threshold,
+                "forward_pessimism (GCE)": forward_pessimism_threshold,
+                "insider_signal (ITA)": insider_threshold,
+            },
+            "elevated_status": {
+                "rlds": rlds_elevated,
+                "forward_pessimism (GCE)": pessimism_elevated,
+                "insider_signal (ITA)": insider_elevated,
+            },
+            "temporal_window_hours": CONVERGENCE_TEMPORAL_WINDOW_HOURS,
+            "within_temporal_window": within_temporal_window,
+            "triplet_signals_elevated": count,
+            "triplet_confidence": triplet_confidence,
+            "triplet_boost": triplet_boost,
+            "interpretation": interpretation_map.get(triplet_confidence, "État inconnu"),
+            "signal_category": "composite",
+            "signal_role": "derived",
+            "model_version": model_version,
+        },
+    )
+
+def _enrich_triplet_context(
+    signal_values: dict[str, Any],
+    resolved_inputs: dict[str, ResolvedSignalInput],
+) -> None:
+    """Injecte confiance moyenne et timestamps pour le triplet convergence."""
+    confidences = [
+        float(resolution.confidence)
+        for resolution in resolved_inputs.values()
+        if resolution.confidence is not None
+    ]
+    signal_values["_overall_confidence"] = (
+        sum(confidences) / len(confidences) if confidences else 0.0
+    )
+
+    timestamps: dict[str, Any] = {}
+    for name in ("rlds", "forward_pessimism", "insider_signal"):
+        resolution = resolved_inputs.get(name)
+        if resolution is None or resolution.source_row is None:
+            continue
+        computed_at = resolution.source_row.computed_at
+        if computed_at is not None:
+            timestamps[name] = computed_at
+    signal_values["_signal_timestamps"] = timestamps
+
+
+def _ita_context_from_insider_row(insider_row: SignalScore | None) -> dict[str, Any]:
+    if insider_row is None or not isinstance(insider_row.detail, dict):
+        return {"sell_ratio": 0.0, "has_unplanned_sales": False}
+
+    detail = insider_row.detail
+    components = detail.get("component_scores")
+    if isinstance(components, dict):
+        sell_ratio = _safe_float(components.get("sell_ratio"))
+        if sell_ratio is None:
+            sell_ratio = _safe_float(components.get("ita")) or _safe_float(components.get("weighted_ita"))
+        has_unplanned = components.get("has_opportunistic_sales")
+        if has_unplanned is None:
+            has_unplanned = bool(components.get("opportunistic_sell_value", 0) > 0)
+        return {
+            "sell_ratio": float(sell_ratio or 0.0),
+            "has_unplanned_sales": bool(has_unplanned),
+        }
+
+    return {
+        "sell_ratio": _safe_float(insider_row.signal_value) or 0.0,
+        "has_unplanned_sales": False,
+    }
+
+
+def _filing_reference_date(filing: Filing) -> datetime:
+    filed_at = getattr(filing, "filed_at", None) or getattr(filing, "filed_on", None)
+    if filed_at is None:
+        return datetime.now(timezone.utc)
+    if isinstance(filed_at, datetime):
+        if filed_at.tzinfo is None:
+            return filed_at.replace(tzinfo=timezone.utc)
+        return filed_at
+    return datetime.combine(filed_at, datetime.min.time(), tzinfo=timezone.utc)
 
 
 def _build_nci_signal(
@@ -351,6 +627,7 @@ def _build_nci_signal(
     model_version: str,
     signal_values: dict[str, float | None],
     convergence: ComputedCompositeSignal,
+    triplet_convergence: ComputedCompositeSignal,
     input_resolutions: dict[str, ResolvedSignalInput],
 ) -> ComputedCompositeSignal:
     definition = get_signal_definition("nci_global")
@@ -434,7 +711,7 @@ def _build_nci_signal(
         if available_weight >= TOTAL_DECLARED_NCI_WEIGHT
         else ((weighted_sum / available_weight) * TOTAL_DECLARED_NCI_WEIGHT)
     )
-    convergence_boost = float(convergence.signal_value or 0.0)
+    convergence_boost = float(triplet_convergence.signal_value or 0.0)
     raw_total = raw_score + convergence_boost
     normalization = _normalize_nci_value(
         db,
@@ -443,7 +720,44 @@ def _build_nci_signal(
         current_filing_id=filing.id,
     )
     boosted_score = float(normalization["value"])
+    # ── Détail du boost triplet ──
+    triplet_detail = {}
+    triplet_signals_fired = []
+    
+    # Récupérer le détail du triplet depuis signal_values
+    rlds = signal_values.get("rlds")
+    forward_pessimism = signal_values.get("forward_pessimism")
+    insider_signal = signal_values.get("insider_signal")
+    
+    if rlds is not None and rlds >= CONVERGENCE_TRIPLET["rlds_threshold"]:
+        triplet_signals_fired.append("rlds")
+    if forward_pessimism is not None and forward_pessimism >= CONVERGENCE_TRIPLET["forward_pessimism_threshold"]:
+        triplet_signals_fired.append("forward_pessimism")
+    if insider_signal is not None and insider_signal >= CONVERGENCE_TRIPLET["ita_threshold"]:
+        triplet_signals_fired.append("ita")
 
+    pre_boost_nci = float(_normalize_nci_value(
+        db,
+        raw_total=raw_score,  # sans le boost
+        model_version=model_version,
+        current_filing_id=filing.id,
+    )["value"])
+
+    triplet_meta = triplet_convergence.detail if isinstance(triplet_convergence.detail, dict) else {}
+    triplet_detail = {
+        "convergence_boost_applied": convergence_boost > 0,
+        "convergence_tier": triplet_meta.get("triplet_confidence", "none"),
+        "triplet_signals_fired": triplet_signals_fired,
+        "boost_value": convergence_boost,
+        "pre_boost_nci": round(pre_boost_nci, 4),
+        "post_boost_nci": round(boosted_score, 4),
+        "within_temporal_window": triplet_meta.get("within_temporal_window"),
+        "multi_layer_convergence_tier": (
+            convergence.detail.get("tier", "none")
+            if isinstance(convergence.detail, dict)
+            else "none"
+        ),
+    }
     confidence_scores = []
     for name in active_weights:
         resolution = input_resolutions.get(name)
@@ -487,6 +801,9 @@ def _build_nci_signal(
             "raw_score": raw_score,
             "raw_total_before_normalization": raw_total,
             "convergence_boost": convergence_boost,
+            "nci_boost_source": "triplet_convergence_signal",
+            "triplet_boost_detail": triplet_detail,
+            "multi_layer_convergence_boost": float(convergence.signal_value or 0.0),
             "normalization_method": normalization["method"],
             "normalization_reference_count": normalization["history_count"],
             "normalization_mean": normalization.get("mean"),

@@ -1,0 +1,63 @@
+<div class="watchlist">
+  <!-- Header -->
+  <div class="watchlist__header">
+    <div class="watchlist__title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Watchlist
+    </div>
+    <div class="watchlist__sse" [class.watchlist__sse--live]="sse.connected()">
+      <span class="live-dot" [style.background]="sse.connected() ? 'var(--green)' : 'var(--text-muted)'"></span>
+      {{ sse.connected() ? 'LIVE' : 'OFF' }}
+    </div>
+  </div>
+
+  <!-- Loading skeletons -->
+  @if (loading) {
+    <div class="watchlist__list">
+      @for (i of [1,2,3,4,5,6,7]; track i) {
+        <div class="watchlist-item watchlist-item--skeleton">
+          <div class="skeleton" style="width:40px;height:13px"></div>
+          <div class="skeleton" style="width:80px;height:11px;margin-top:4px"></div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="watchlist__list">
+      @for (c of companies; track c.id) {
+        <button
+          class="watchlist-item"
+          [class.watchlist-item--active]="c.id === selectedId"
+          (click)="select(c)"
+        >
+          <div class="watchlist-item__left">
+            <!-- Trend icon -->
+            <span class="watchlist-item__trend" [class]="trendClass(c.nciLabel)">
+              {{ trendIcon(c.nciLabel) }}
+            </span>
+
+            <div class="watchlist-item__info">
+              <div class="watchlist-item__ticker mono">{{ c.ticker }}</div>
+              <div class="watchlist-item__name">{{ c.name }}</div>
+            </div>
+          </div>
+
+          <div class="watchlist-item__right">
+            <!-- NCI value -->
+            <div class="watchlist-item__nci" [class]="'nci-badge nci-' + c.nciLabel.toLowerCase()">
+              {{ nciPercent(c.nciGlobal) }}
+            </div>
+
+            <!-- Unread alert badge -->
+            @if (unreadCount(c.ticker) > 0) {
+              <div class="unread-badge watchlist-item__alerts">
+                {{ unreadCount(c.ticker) }}
+              </div>
+            }
+          </div>
+        </button>
+      }
+    </div>
+  }
+</div>

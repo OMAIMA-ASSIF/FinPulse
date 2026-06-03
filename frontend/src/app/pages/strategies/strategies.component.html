@@ -1,0 +1,204 @@
+<div class="strat-page">
+
+  <!-- Header -->
+  <div class="strat-header">
+    <div>
+      <h1 class="display strat-page__title">My Strategies</h1>
+      <p class="strat-page__sub">
+        {{ strategySvc.activeStrategies().length }} active (s) ·
+        {{ strategySvc.archivedStrategies().length }} disabled
+      </p>
+    </div>
+    <button class="btn btn-primary" (click)="openWatchlist()">View Watchlist</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="strat-tabs">
+    <button class="strat-tab" [class.strat-tab--active]="activeTab()==='active'"
+            (click)="activeTab.set('active')">
+      Active
+      <span class="strat-tab__count">{{ strategySvc.activeStrategies().length }}</span>
+    </button>
+    <button class="strat-tab" [class.strat-tab--active]="activeTab()==='archived'"
+            (click)="activeTab.set('archived')">
+      Disabled
+      <span class="strat-tab__count">{{ strategySvc.archivedStrategies().length }}</span>
+    </button>
+  </div>
+
+  @if (strategySvc.loading()) {
+    <div class="strat-loading"><div class="spinner"></div></div>
+  } @else if (displayed().length === 0) {
+    <div class="strat-empty">
+      <h3>{{ activeTab() === 'active' ? 'No active strategies' : 'Disabled strategies' }}</h3>
+      <p>
+        @if (activeTab() === 'active') {
+          Use the AI Agent to create your first strategy — it will be saved and monitored automatically.
+        } @else {
+          Strategies you disable will appear here and can be reactivated at any time.
+        }
+      </p>
+      @if (activeTab() === 'active') {
+        <button class="btn btn-primary" (click)="openAgent(0)">🤖 Open AI Agent</button>
+      }
+    </div>
+  } @else {
+    <div class="strat-grid">
+      @for (s of displayed(); track s.id) {
+        <div class="strat-card" [class.strat-card--inactive]="!s.isActive" [class.highlight-active]="highlightedId() === s.id">
+
+          <!-- Header -->
+          <div class="strat-card__header">
+            <div class="strat-card__co">
+              <div class="strat-card__logo">{{ s.company.ticker.slice(0,2) }}</div>
+              <div>
+                <div class="strat-card__ticker mono">{{ s.company.ticker }}</div>
+                <div class="strat-card__name">{{ s.company.name }}</div>
+              </div>
+            </div>
+            <div class="strat-card__badges">
+              <span [class]="statusClass(s)">{{ statusLabel(s) }}</span>
+              @if (unreadAlerts(s.company.ticker) > 0) {
+                <span class="unread-badge">{{ unreadAlerts(s.company.ticker) }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="strat-nci">
+            <div class="strat-nci__item">
+              <div class="strat-nci__label">Global NCI</div>
+              <div class="strat-nci__val mono" [style.color]="nciColor(s.company.nciGlobal)">
+                {{ (s.company.nciGlobal * 100) | number:'1.1-1' }}
+              </div>
+            </div>
+            <div class="strat-nci__arrow">→</div>
+            <div class="strat-nci__item">
+              <div class="strat-nci__label" style="color:var(--brand)">Your NCI</div>
+              <div class="strat-nci__val mono" [style.color]="nciColor(s.nciPersonalized)">
+                {{ (s.nciPersonalized * 100) | number:'1.1-1' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Thesis -->
+          @if (s.userArgument) {
+            <div class="strat-thesis">
+              <div class="strat-thesis__label">Investment Thesis</div>
+              <p class="strat-thesis__text">{{ s.userArgument }}</p>
+            </div>
+          }
+
+          <!-- Actions -->
+          <div class="strat-card__actions">
+            <button class="btn btn-ghost btn-sm" (click)="openCompany(s.company.id)">Dashboard</button>
+            <button class="btn btn-ghost btn-sm" (click)="viewReport(s)">📄 Report</button>
+            <button class="btn btn-ghost btn-sm" [disabled]="downloadingId()===s.id"
+                    (click)="downloadPdf(s)">
+              @if (downloadingId()===s.id) { <div class="spinner" style="width:10px;height:10px;border-width:1.5px"></div> }
+              @else { 📥 PDF }
+            </button>
+            @if (s.isActive) {
+              <button class="btn btn-ghost btn-sm" (click)="deactivate(s)">Disable</button>
+            } @else {
+              <button class="btn btn-success btn-sm" (click)="reactivate(s)">↺ Reactivate</button>
+            }
+            <button class="btn btn-danger btn-sm" (click)="askDelete(s)">Delete</button>
+          </div>
+
+          <!-- Delete confirm inline -->
+          @if (confirmDeleteId() === s.id) {
+            <div class="strat-delete-confirm">
+              <p>Remove strategy for <strong>{{ s.company.ticker }}</strong>? This cannot be undone.</p>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-ghost btn-xs" (click)="cancelDelete()">Cancel</button>
+                <button class="btn btn-danger btn-xs" (click)="confirmDelete(s)">Yes, delete</button>
+              </div>
+            </div>
+          }
+
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- ── Report Modal ─────────────────────────────────────────────── -->
+@if (reportLoading()) {
+  <div class="report-overlay">
+    <div class="report-modal report-modal--loading">
+      <div class="spinner" style="width:32px;height:32px;border-width:3px"></div>
+      <p>Generating report…</p>
+    </div>
+  </div>
+}
+
+@if (reportModal()) {
+  <div class="report-overlay" (click)="closeReport()">
+    <div class="report-modal" (click)="$event.stopPropagation()">
+
+      <div class="report-modal__header">
+        <div class="report-modal__co">
+          <span class="report-modal__ticker mono">{{ reportModal()!.ticker }}</span>
+          <span class="report-modal__name">{{ reportModal()!.companyName }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span [class]="recClass(reportModal()!.recommendation)" style="font-size:12px;padding:4px 10px">
+            {{ reportModal()!.recommendation }}
+          </span>
+          <span class="mono" style="font-size:11px;color:var(--cyan)">
+            NCI {{ (reportModal()!.nciPersonalized * 100) | number:'1.0-0' }}
+          </span>
+          <button class="report-modal__close" (click)="closeReport()">✕</button>
+        </div>
+      </div>
+
+      <div class="report-modal__body">
+
+        <div class="report-section">
+          <div class="report-section__title">📝 Investment Thesis</div>
+          <p class="report-section__text">{{ reportModal()!.thesis }}</p>
+        </div>
+
+        @if (reportModal()!.bullCase.length) {
+          <div class="report-section">
+            <div class="report-section__title" style="color:var(--green)">✅ Bull Case</div>
+            @for (item of reportModal()!.bullCase; track item) {
+              <div class="report-item report-item--bull">{{ item }}</div>
+            }
+          </div>
+        }
+
+        @if (reportModal()!.risks.length) {
+          <div class="report-section">
+            <div class="report-section__title" style="color:var(--red)">🔴 Risks</div>
+            @for (item of reportModal()!.risks; track item) {
+              <div class="report-item report-item--risk">{{ item }}</div>
+            }
+          </div>
+        }
+
+        @if (reportModal()!.secContradictions.length) {
+          <div class="report-section">
+            <div class="report-section__title" style="color:var(--orange)">⚠ SEC Contradictions</div>
+            @for (item of reportModal()!.secContradictions; track item) {
+              <div class="report-item report-item--warn">{{ item }}</div>
+            }
+          </div>
+        }
+
+        @if (reportModal()!.historicalInsight) {
+          <div class="report-section">
+            <div class="report-section__title" style="color:var(--cyan)">📈 Historical Insight</div>
+            <p class="report-section__text">{{ reportModal()!.historicalInsight }}</p>
+          </div>
+        }
+
+        <div class="report-footer">
+          <span class="mono" style="font-size:10px;color:var(--text-muted)">
+            Generated {{ reportModal()!.generatedAt | date:'MMM d yyyy, HH:mm' }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,253 @@
+<div class="profile-page">
+  <div class="profile-container">
+
+    <h1 class="display profile-page__title">My Profile</h1>
+
+    @if (globalError()) {
+      <div class="profile-banner profile-banner--error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        {{ globalError() }}
+        <button (click)="globalError.set('')">✕</button>
+      </div>
+    }
+
+    <!-- Tabs -->
+    <div class="profile-tabs">
+      <button class="profile-tab" [class.profile-tab--active]="activeTab()==='account'" (click)="activeTab.set('account')">
+        Account
+      </button>
+      <button class="profile-tab" [class.profile-tab--active]="activeTab()==='security'" (click)="activeTab.set('security')">
+        Security
+      </button>
+      <button class="profile-tab" [class.profile-tab--active]="activeTab()==='preferences'" (click)="activeTab.set('preferences')">
+        Preferences
+      </button>
+    </div>
+
+    <!-- ── ACCOUNT ────────────────────────────────────────────────── -->
+    @if (activeTab() === 'account') {
+      <div class="profile-grid">
+
+        <!-- Avatar card -->
+        <div class="card profile-card">
+          <div class="section-label">Profile Picture</div>
+          <div class="avatar-section">
+            <div class="avatar-wrap">
+              @if (fullAvatarUrl()) {
+                <img [src]="fullAvatarUrl()!" alt="avatar" class="avatar-img"/>
+              } @else {
+                <div class="avatar-initials">{{ auth.initials() }}</div>
+              }
+              @if (avatarUploading()) {
+                <div class="avatar-loading">
+                  <div class="spinner" style="width:20px;height:20px;border-width:2px;border-top-color:#fff"></div>
+                </div>
+              }
+            </div>
+            <input #fileInput type="file" accept="image/*" style="display:none" (change)="onFileSelected($event)"/>
+            <div class="avatar-actions">
+              <button class="btn btn-ghost btn-sm" (click)="triggerFileInput()" [disabled]="avatarUploading()">
+                 {{ fullAvatarUrl() ? 'Replace' : 'Upload photo' }}
+              </button>
+              @if (fullAvatarUrl()) {
+                <button class="btn btn-danger btn-sm" (click)="removeAvatar()" [disabled]="avatarUploading()">Remove</button>
+              }
+            </div>
+            @if (avatarError()) { <p class="form-error">{{ avatarError() }}</p> }
+            <p class="avatar-hint">JPG, PNG or GIF · Max 5MB</p>
+          </div>
+
+          <div class="profile-stats">
+            <div class="profile-stat">
+              <div class="profile-stat__val mono">{{ strategySvc.activeStrategies().length }}</div>
+              <div class="profile-stat__lbl">Strategies</div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat__val mono">{{ alertSvc.alerts().length }}</div>
+              <div class="profile-stat__lbl">Alerts</div>
+            </div>
+            <div class="profile-stat">
+              <div class="profile-stat__val mono" style="color:var(--red)">{{ alertSvc.unreadCount() }}</div>
+              <div class="profile-stat__lbl">Unread</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info card -->
+        <div class="card profile-card">
+          <div class="section-label">Account Information</div>
+
+          @if (!editMode()) {
+            <div class="info-row"><span class="info-row__label">Username</span><span class="info-row__val">{{ auth.username() }}</span></div>
+            <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__val">{{ auth.email() }}</span></div>
+            <div class="info-row">
+              <span class="info-row__label">Member since</span>
+              <span class="info-row__val mono">{{ auth.profile()?.createdAt | date:'MMMM yyyy' }}</span>
+            </div>
+            @if (infoSaved()) {
+              <div class="profile-banner profile-banner--success"> Information updated</div>
+            }
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px" (click)="startEdit()">✏ Edit information</button>
+          } @else {
+            @if (infoError()) {
+              <div class="profile-banner profile-banner--error" style="margin-bottom:12px">{{ infoError() }}</div>
+            }
+            <div class="form-group">
+              <label class="fp-label">Username</label>
+              <input class="fp-input" type="text" [ngModel]="editUsername()" (ngModelChange)="editUsername.set($event)"/>
+            </div>
+            <div class="form-group">
+              <label class="fp-label">Email</label>
+              <input class="fp-input" type="email" [ngModel]="editEmail()" (ngModelChange)="editEmail.set($event)"/>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" (click)="cancelEdit()">Cancel</button>
+              <button class="btn btn-primary btn-sm" [disabled]="infoSaving()" (click)="saveInfo()">
+                @if (infoSaving()) { <div class="spinner" style="width:11px;height:11px;border-width:2px"></div> }
+                Save
+              </button>
+            </div>
+          }
+
+          <div style="height:1px;background:var(--border-dim);margin:16px 0"></div>
+          <div class="section-label" style="color:var(--red)">Danger Zone</div>
+          <div class="danger-zone">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Delete account</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Permanently removes all your data from PostgreSQL and Keycloak.</div>
+            </div>
+            <button class="btn btn-danger btn-sm" (click)="confirmDelete()">Delete account</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── SECURITY ───────────────────────────────────────────────── -->
+    @if (activeTab() === 'security') {
+      <div class="card profile-card" style="max-width:520px">
+        <div class="section-label">Change Password</div>
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px">
+          Your password is managed by Keycloak. Enter your current password to verify your identity.
+        </p>
+
+        @if (pwdSaved()) {
+          <div class="profile-banner profile-banner--success">Password changed successfully.</div>
+        }
+        @if (pwdError()) {
+          <div class="profile-banner profile-banner--error">{{ pwdError() }}</div>
+        }
+
+        <div class="form-group">
+          <label class="fp-label">Current password</label>
+          <div class="input-wrap">
+            <input class="fp-input" [type]="showCurrentPwd() ? 'text' : 'password'"
+                   [(ngModel)]="pwdForm.current" placeholder="Current password"
+                   autocomplete="current-password"/>
+            <button type="button" class="input-eye" (click)="showCurrentPwd.set(!showCurrentPwd())">
+              {{ showCurrentPwd() ? '🙈' : '👁' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="fp-label">New password</label>
+          <div class="input-wrap">
+            <input class="fp-input" [type]="showNewPwd() ? 'text' : 'password'"
+                   [(ngModel)]="pwdForm.newPwd" placeholder="At least 8 characters"
+                   autocomplete="new-password"/>
+            <button type="button" class="input-eye" (click)="showNewPwd.set(!showNewPwd())">
+              {{ showNewPwd() ? '🙈' : '👁' }}
+            </button>
+          </div>
+          @if (pwdForm.newPwd) {
+            <div class="strength-bar">
+              <div class="strength-bar__track">
+                <div class="strength-bar__fill" [class]="passwordStrength().class" [style.width.%]="passwordStrength().width"></div>
+              </div>
+              <span class="strength-bar__label" [class]="passwordStrength().class">{{ passwordStrength().label }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="form-group">
+          <label class="fp-label">Confirm new password</label>
+          <input class="fp-input" [type]="showNewPwd() ? 'text' : 'password'"
+                 [(ngModel)]="pwdForm.confirm" placeholder="Repeat new password" autocomplete="new-password"/>
+          @if (pwdForm.confirm && pwdForm.newPwd !== pwdForm.confirm) {
+            <span class="form-error">Passwords do not match</span>
+          }
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center"
+                [disabled]="pwdSaving() || !pwdForm.current || !pwdForm.newPwd || !pwdForm.confirm"
+                (click)="changePassword()">
+          @if (pwdSaving()) { <div class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff"></div> }
+          Update password
+        </button>
+      </div>
+
+      <div class="card profile-card" style="max-width:520px;margin-top:16px">
+        <div class="section-label">Session</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;color:var(--text-primary);font-weight:500">Sign out of FinPulse</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">You will be redirected to the login page.</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" (click)="logout()">Sign out</button>
+        </div>
+      </div>
+    }
+
+    <!-- ── PREFERENCES ────────────────────────────────────────────── -->
+    @if (activeTab() === 'preferences') {
+      <div class="card profile-card" style="max-width:700px">
+        <div class="section-label">Investor Profile</div>
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px">
+          Adjusts the NCI weight calculation for all your analyses. <strong>PRUDENT</strong> uses raw NCI.
+          <strong>SPÉCULATEUR</strong> amplifies NCI for higher risk tolerance.(Click to change your profile)
+        </p>
+        <div class="profile-type-grid">
+          <button class="profile-type-btn" [class.profile-type-btn--active]="auth.profileType()==='PRUDENT'" (click)="setProfile('PRUDENT')">
+            <div class="profile-type-btn__icon">🛡</div>
+            <div class="profile-type-btn__name">PRUDENT</div>
+            <div class="profile-type-btn__desc">Conservative · Capital protection · NCI × 1.0</div>
+            @if (auth.profileType()==='PRUDENT') { <span class="profile-type-btn__check">✓</span> }
+          </button>
+          <button class="profile-type-btn profile-type-btn--spec" [class.profile-type-btn--active]="auth.profileType()==='SPECULATEUR'" (click)="setProfile('SPECULATEUR')">
+            <div class="profile-type-btn__icon">⚡</div>
+            <div class="profile-type-btn__name">SPÉCULATEUR</div>
+            <div class="profile-type-btn__desc">Aggressive · High risk · NCI × 1.15</div>
+            @if (auth.profileType()==='SPECULATEUR') { <span class="profile-type-btn__check" style="color:var(--orange)">✓</span> }
+          </button>
+        </div>
+        <div class="profile-nci-impact">
+          <div class="section-label" style="margin-bottom:4px">Current NCI Multiplier</div>
+          <div class="mono" style="font-size:13px;color:var(--brand)">{{ nciImpact() }}</div>
+        </div>
+        @if (profileSaving()) { <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)"><div class="spinner" style="width:13px;height:13px;border-width:2px"></div>Updating…</div> }
+        @if (profileSaved()) { <div class="profile-banner profile-banner--success" style="margin-top:12px">Investor profile updated</div> }
+      </div>
+    }
+
+  </div>
+
+  <!-- Delete modal -->
+  @if (showDeleteConfirm()) {
+    <div class="delete-overlay" (click)="cancelDelete()">
+      <div class="delete-modal" (click)="$event.stopPropagation()">
+        <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+        <h3>Delete your account?</h3>
+        <p>This permanently removes your account, all strategies, alerts and data from both PostgreSQL and Keycloak. <strong>This cannot be undone.</strong></p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="btn btn-ghost" (click)="cancelDelete()" [disabled]="deleting()">Cancel</button>
+          <button class="btn btn-danger" (click)="deleteAccount()" [disabled]="deleting()">
+            @if (deleting()) { <div class="spinner" style="width:12px;height:12px;border-width:2px;border-top-color:#fff"></div> }
+            Yes, delete account
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

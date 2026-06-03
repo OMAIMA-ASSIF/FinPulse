@@ -13,6 +13,25 @@ from app.db.models.embedding import Embedding
 from app.db.models.filing import Filing
 from app.db.models.filing_section import FilingSection
 from app.db.session import get_db_dependency
+from pydantic import BaseModel
+from typing import Optional
+
+from app.db.models.company import Company
+from signals.sector_autoencoder import SectorAutoencoderManager
+
+class AnomalyParagraph(BaseModel):
+    text:             str
+    section:          Optional[str]
+    filing_id:        int
+    anomaly_score:    float
+    mse:              float
+    sector_threshold: float
+
+class AnomalyResponse(BaseModel):
+    ticker:      str
+    filing_id:   int
+    total_found: int
+    paragraphs:  list[AnomalyParagraph]
 
 router = APIRouter()
 EMBEDDING_SCALAR_FIELDS = (
@@ -69,7 +88,116 @@ def get_latest_embedding_scalar(
         include_vector=include_vector,
     )
 
+@router.get(
+    "/{ticker}/anomalies",
+    response_model=AnomalyResponse,
+    summary="Paragraphes les plus anormaux d'un filing"
+)
+def get_anomalous_paragraphs(
+    ticker:    str,
+    filing_id: int   = Query(None, description="ID du filing à analyser (si non fourni, utilise le dernier filing)"),
+    top_k:     int   = Query(5,   description="Nombre de paragraphes à retourner", ge=0, le=5000),
+    min_score: float = Query(0.0, description="Score minimum pour filtrer", ge=0.0, le=1.0),
+    db:        Session = Depends(get_db_dependency),
+) -> AnomalyResponse:
 
+    # 1. Trouver le ticker dans la table companies ou via les filings
+    normalized_ticker = ticker.upper()
+    company = db.scalar(select(Company).where(Company.ticker == normalized_ticker))
+
+    # Si pas de company, essayer de trouver via les filings
+    if not company:
+        filing_with_ticker = db.scalar(
+            select(Filing)
+            .join(Company, Filing.company_id == Company.id)
+            .where(Company.ticker == normalized_ticker)
+            .limit(1)
+        )
+        if not filing_with_ticker:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ticker '{normalized_ticker}' not found in companies or filings"
+            )
+        company = db.scalar(select(Company).where(Company.id == filing_with_ticker.company_id))
+
+    # 2. Récupérer le seuil du secteur
+    manager = SectorAutoencoderManager()
+    _, sector_threshold = manager.load_model(company.sic_code)
+    if sector_threshold is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No trained model for sector {company.sic_code}"
+        )
+
+    # 3. TOUTES les anomalies (TOUS les embeddings avec anomaly_score) pour cette company
+    # Si filing_id fourni, filtrer sur ce filing; sinon, retourner tous les filings
+    if filing_id is not None:
+        # Vérifier que le filing appartient bien à ce company
+        filing = db.scalar(
+            select(Filing).where(
+                Filing.id         == filing_id,
+                Filing.company_id == company.id
+            )
+        )
+        if not filing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Filing {filing_id} not found for ticker '{normalized_ticker}'"
+            )
+        # Récupérer TOUS les embeddings du filing spécifique
+        rows = db.execute(
+            select(Embedding)
+            .where(
+                Embedding.filing_id     == filing_id,
+                Embedding.anomaly_score.isnot(None)
+            )
+            .order_by(Embedding.anomaly_score.desc())
+        ).scalars().all()
+    else:
+        # Récupérer TOUS les embeddings de TOUS les filings de la company
+        query = (
+            select(Embedding)
+            .join(Filing, Embedding.filing_id == Filing.id)
+            .where(
+                Filing.company_id == company.id,
+                Embedding.anomaly_score.isnot(None)
+            )
+            .order_by(Embedding.anomaly_score.desc())
+        )
+        if top_k and top_k > 0:
+            if top_k == 0:
+                rows = db.execute(query).scalars().all()
+            else:
+                rows = db.execute(query.limit(top_k)).scalars().all()
+        rows = db.execute(query).scalars().all()
+
+    if not rows:
+        return AnomalyResponse(
+            ticker=ticker.upper(),
+            filing_id=filing_id or 0,
+            total_found=0,
+            paragraphs=[]
+        )
+
+    # 4. Construire la réponse
+    paragraphs = [
+        AnomalyParagraph(
+            text=             r.text,
+            section=          r.filing_section.section if r.filing_section else None,
+            filing_id=        r.filing_id,
+            anomaly_score=    round(r.anomaly_score, 4),
+            mse=              round(r.reconstruction_error, 6),
+            sector_threshold= round(sector_threshold, 6),
+        )
+        for r in rows
+    ]
+
+    return AnomalyResponse(
+        ticker=      ticker.upper(),
+        filing_id=   filing_id or 0,
+        total_found= len(paragraphs),
+        paragraphs=  paragraphs
+    )
 @router.get(
     "/{ticker}/latest",
     response_model=list[EmbeddingRow],

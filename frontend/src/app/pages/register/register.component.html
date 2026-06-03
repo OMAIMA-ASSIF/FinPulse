@@ -1,0 +1,243 @@
+<div class="register-page">
+  <div class="register-bg" aria-hidden="true"></div>
+
+  <div class="register-card">
+
+    <!-- Header -->
+    <div class="register-card__header">
+      <a routerLink="/landing" class="register-card__back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Retour   
+      </a>
+      <div class="register-card__logo">
+        <div class="register-card__logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <span>FinPulse</span>
+        <span class="register-card__logo-tag">AI</span>
+      </div>
+      <h1 class="register-card__title">Créer un compte</h1>
+      <p class="register-card__sub">Rejoignez FinPulse et commencez à analyser les marchés</p>
+    </div>
+
+    <!-- Success state -->
+    @if (success()) {
+      <div class="register-success">
+        <h2>Compte créé avec succès !</h2>
+        <p>Vous allez être redirigé vers la page de connexion...…</p>
+      </div>
+    } @else {
+
+      <!-- Form -->
+      <form #ngForm="ngForm" (ngSubmit)="submit(ngForm)" class="register-form" novalidate>
+
+        <!-- Username -->
+        <div class="form-group">
+          <label class="fp-label" for="username">Nom d'utilisateur</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input
+              id="username"
+              name="username"
+              type="text"
+              class="fp-input"
+              placeholder="ex: hugo"
+              [(ngModel)]="form.username"
+              required minlength="3" maxlength="50"
+              #usernameInput="ngModel"
+              autocomplete="username"
+            />
+          </div>
+          @if (usernameInput.invalid && usernameInput.touched) {
+            <span class="field-error">Minimum 3 caractères</span>
+          }
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label class="fp-label" for="email">Email</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              class="fp-input"
+              placeholder="hugues@gmail.com"
+              [(ngModel)]="form.email"
+              required email
+              #emailInput="ngModel"
+              autocomplete="email"
+            />
+          </div>
+          @if (emailInput.invalid && emailInput.touched) {
+            <span class="field-error">Email invalide</span>
+          }
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+          <label class="fp-label" for="password">Mot de passe</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+            <input
+              id="password"
+              name="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              class="fp-input"
+              placeholder="Minimum 8 caractères"
+              [(ngModel)]="form.password"
+              required minlength="8"
+              #passwordInput="ngModel"
+              autocomplete="new-password"
+            />
+            <button type="button" class="input-toggle" (click)="togglePassword()">
+              @if (showPassword()) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              }
+            </button>
+          </div>
+
+          <!-- Password strength indicator -->
+          @if (form.password) {
+            <div class="strength-bar">
+              <div class="strength-bar__track">
+                <div class="strength-bar__fill" [class]="passwordStrength().class"
+                     [style.width.%]="passwordStrength().width"></div>
+              </div>
+              <span class="strength-bar__label" [class]="passwordStrength().class">
+                {{ passwordStrength().label }}
+              </span>
+            </div>
+          }
+        </div>
+
+        <!-- Confirm Password -->
+        <div class="form-group">
+          <label class="fp-label" for="confirmPwd">Confirmer le mot de passe</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <input
+              id="confirmPwd"
+              name="confirmPwd"
+              [type]="showPassword() ? 'text' : 'password'"
+              class="fp-input"
+              placeholder="Répétez le mot de passe"
+              [(ngModel)]="form.confirmPwd"
+              required
+              autocomplete="new-password"
+            />
+          </div>
+          @if (form.confirmPwd && form.password !== form.confirmPwd) {
+            <span class="field-error">Les mots de passe ne correspondent pas</span>
+          }
+        </div>
+
+        <!-- Profile type selector -->
+        <div class="form-group">
+          <label class="fp-label">Profil investisseur</label>
+          <div class="profile-selector">
+
+            <button type="button"
+                    class="profile-btn"
+                    [class.profile-btn--active]="selectedProfile() === 'PRUDENT'"
+                    (click)="selectProfile('PRUDENT')">
+              <span class="profile-btn__icon">🛡</span>
+              <div class="profile-btn__text">
+                <span class="profile-btn__name">PRUDENT</span>
+                <span class="profile-btn__desc">
+                  Conservation du capital.<br>
+                  NCI évalué sans amplification.
+                </span>
+              </div>
+              @if (selectedProfile() === 'PRUDENT') {
+                <span class="profile-btn__check">✓</span>
+              }
+            </button>
+
+            <button type="button"
+                    class="profile-btn profile-btn--spec"
+                    [class.profile-btn--active]="selectedProfile() === 'SPECULATEUR'"
+                    (click)="selectProfile('SPECULATEUR')">
+              <span class="profile-btn__icon">⚡</span>
+              <div class="profile-btn__text">
+                <span class="profile-btn__name">SPÉCULATEUR</span>
+                <span class="profile-btn__desc">
+                  Tolérance au risque élevée.<br>
+                  NCI amplifié × 1.15.
+                </span>
+              </div>
+              @if (selectedProfile() === 'SPECULATEUR') {
+                <span class="profile-btn__check">✓</span>
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- Error message -->
+        @if (errorMessage()) {
+          <div class="error-banner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {{ errorMessage() }}
+          </div>
+        }
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          class="register-submit"
+          [disabled]="loading() || ngForm.invalid || form.password !== form.confirmPwd">
+          @if (loading()) {
+            <div class="submit-spinner"></div>
+            Création du compte…
+          } @else {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+              <line x1="19" y1="8" x2="19" y2="14"/>
+              <line x1="16" y1="11" x2="22" y2="11"/>
+            </svg>
+            Créer mon compte
+          }
+        </button>
+
+        <!-- Link to login -->
+        <p class="register-login-link">
+          Déjà un compte ?
+          <button type="button" class="register-login-btn" (click)="auth.login()">
+            Se connecter
+          </button>
+        </p>
+
+      </form>
+    }
+  </div>
+</div>

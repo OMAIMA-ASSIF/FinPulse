@@ -1,0 +1,103 @@
+<div class="nci-chart-wrap">
+
+      <!-- Period selector -->
+      <div class="nci-chart__header">
+        <span class="section-label" style="margin-bottom:0">NCI History</span>
+        <div class="nci-chart__periods">
+          @for (p of periods; track p.value) {
+            <button
+              class="period-btn"
+              [class.period-btn--active]="activePeriod() === p.value"
+              [disabled]="loading()"
+              (click)="setPeriod(p.value)">
+              {{ p.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Loading -->
+      @if (loading()) {
+        <div class="nci-chart__loading">
+          <div class="spinner" style="width:24px;height:24px;border-width:2px"></div>
+        </div>
+      }
+
+      <!-- Empty state -->
+      @else if (points().length === 0) {
+        <div class="nci-chart__empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <p>No historical data available</p>
+          <span class="mono">for the selected period</span>
+        </div>
+      }
+
+      <!-- Chart -->
+      @else {
+        <div class="nci-chart__canvas-wrap">
+          <canvas #chartCanvas></canvas>
+        </div>
+
+        <!-- Stats row -->
+        <div class="nci-chart__stats">
+          <div class="nci-chart__stat">
+            <span class="nci-chart__stat-label">Min</span>
+            <span class="nci-chart__stat-val mono"
+                  [style.color]="nciColor(minValue())">
+              {{ (minValue() * 100) | number:'1.1-1' }}
+            </span>
+          </div>
+          <div class="nci-chart__stat">
+            <span class="nci-chart__stat-label">Max</span>
+            <span class="nci-chart__stat-val mono"
+                  [style.color]="nciColor(maxValue())">
+              {{ (maxValue() * 100) | number:'1.1-1' }}
+            </span>
+          </div>
+          <div class="nci-chart__stat">
+            <span class="nci-chart__stat-label">Avg</span>
+            <span class="nci-chart__stat-val mono"
+                  [style.color]="nciColor(avgValue())">
+              {{ (avgValue() * 100) | number:'1.1-1' }}
+            </span>
+          </div>
+          <div class="nci-chart__stat">
+            <span class="nci-chart__stat-label">Trend</span>
+            <span class="nci-chart__stat-val"
+                  [class]="trendClass()">
+              {{ trendLabel() }}
+            </span>
+          </div>
+          <div class="nci-chart__stat">
+            <span class="nci-chart__stat-label">Points</span>
+            <span class="nci-chart__stat-val mono" style="color:var(--text-secondary)">
+              {{ points().length }}
+            </span>
+          </div>
+        </div>
+      }
+
+      <!-- Point detail popup -->
+      @if (selectedPoint()) {
+        <div class="nci-chart__popup">
+          <div class="nci-chart__popup-header">
+            <span class="mono" style="font-size:11px;color:var(--text-muted)">
+              {{ selectedPoint()!.rawDate | date:'MMM d yyyy, HH:mm' }}
+            </span>
+            <button class="nci-chart__popup-close"
+                    (click)="selectedPoint.set(null)">✕</button>
+          </div>
+          <div class="nci-chart__popup-body">
+            <div class="nci-chart__popup-nci mono"
+                 [style.color]="nciColor(selectedPoint()!.value)">
+              {{ (selectedPoint()!.value * 100) | number:'1.2-2' }}
+            </div>
+            <div class="nci-chart__popup-reason">
+              {{ selectedPoint()!.reason || 'Regular NCI update' }}
+            </div>
+          </div>
+        </div>
+      }
+</div>

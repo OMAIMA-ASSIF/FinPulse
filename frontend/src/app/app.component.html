@@ -1,0 +1,9 @@
+<div class="app-shell">
+    <!-- Header uniquement si connecté -->
+    @if (auth.isLoggedIn()) {
+        <app-header />
+      }
+    <div [class]="auth.isLoggedIn() ? 'app-content' : 'app-content-full'">
+        <router-outlet />
+    </div>
+</div>

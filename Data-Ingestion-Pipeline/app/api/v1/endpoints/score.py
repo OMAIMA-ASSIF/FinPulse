@@ -121,6 +121,7 @@ def _build_score_response(db: Session, ticker: str) -> ScoreResponse:
     }
 
     return ScoreResponse(
+        company_id=company.id,
         ticker=company.ticker,
         company_name=company.name,
         sector=company.sector,

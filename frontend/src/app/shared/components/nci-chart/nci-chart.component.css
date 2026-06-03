@@ -1,0 +1,65 @@
+.nci-chart-wrap { display: flex; flex-direction: column; gap: 12px; }
+
+.nci-chart__header { display: flex; align-items: center; justify-content: space-between; }
+.nci-chart__periods { display: flex; gap: 4px; }
+.period-btn {
+    padding: 4px 10px; border-radius: var(--r-sm);
+    border: 1px solid var(--border-base);
+    background: transparent; color: var(--text-muted);
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; font-family: var(--font-mono);
+}
+.period-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.period-btn--active { background: var(--brand-dim); border-color: rgba(59,130,246,0.3); color: var(--brand); }
+.period-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.nci-chart__loading {
+    height: 220px; display: flex; align-items: center; justify-content: center;
+}
+.nci-chart__empty {
+    height: 220px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px; color: var(--text-muted);
+}
+.nci-chart__empty svg { width: 40px; height: 40px; opacity: 0.25; }
+.nci-chart__empty p { font-size: 13px; color: var(--text-secondary); }
+.nci-chart__empty span { font-size: 11px; }
+
+.nci-chart__canvas-wrap { height: 220px; position: relative; }
+.nci-chart__canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+
+    /* Stats row */
+    .nci-chart__stats {
+      display: flex; gap: 0;
+      border: 1px solid var(--border-dim); border-radius: var(--r-md);
+      overflow: hidden;
+    }
+    .nci-chart__stat {
+      flex: 1; text-align: center; padding: 8px 6px;
+      border-right: 1px solid var(--border-dim);
+      background: var(--bg-elevated);
+    }
+    .nci-chart__stat:last-child { border-right: none; }
+    .nci-chart__stat-label { display: block; font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; font-family: var(--font-mono); margin-bottom: 3px; }
+    .nci-chart__stat-val   { display: block; font-size: 14px; font-weight: 700; line-height: 1; }
+
+    /* Point popup */
+    .nci-chart__popup {
+      padding: 12px 14px; background: var(--bg-elevated);
+      border: 1px solid var(--border-hi); border-radius: var(--r-md);
+      animation: fadeUp 0.15s ease;
+    }
+    .nci-chart__popup-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .nci-chart__popup-close {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 12px; cursor: pointer; padding: 2px 5px;
+      border-radius: var(--r-sm); transition: all 0.15s;
+    }
+    .nci-chart__popup-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nci-chart__popup-body { display: flex; align-items: center; gap: 14px; }
+    .nci-chart__popup-nci    { font-size: 26px; font-weight: 700; line-height: 1; }
+    .nci-chart__popup-reason { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+  

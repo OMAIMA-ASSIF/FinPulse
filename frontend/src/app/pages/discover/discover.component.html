@@ -1,0 +1,492 @@
+<div class="discover-host">
+
+  <!-- VUE 1 : ONBOARDING (premier login) -->
+  @if (view() === 'onboarding') {
+    <div class="onboarding-overlay">
+      <div class="onboarding-modal">
+
+        <!-- Progress -->
+        <div class="onboarding-progress">
+          @for (s of [1,2,3]; track s) {
+            <div class="onboarding-progress__step"
+                 [class.onboarding-progress__step--done]="onboardingStep() > s"
+                 [class.onboarding-progress__step--active]="onboardingStep() === s">
+              @if (onboardingStep() > s) { ✓ } @else { {{ s }} }
+            </div>
+            @if (s < 3) {
+              <div class="onboarding-progress__line"
+                   [class.onboarding-progress__line--done]="onboardingStep() > s"></div>
+            }
+          }
+        </div>
+
+        <!-- STEP 1 : Sectors -->
+        @if (onboardingStep() === 1) {
+          <div class="onboarding-step">
+            <div class="onboarding-step__emoji">🏢</div>
+            <h2 class="onboarding-step__title display">Which sectors interest you?</h2>
+            <p class="onboarding-step__sub">Select one or more to get personalized recommendations.</p>
+            <div class="onboarding-sectors">
+              @for (sector of availableSectors; track sector) {
+                <button class="sector-btn"
+                        [class.sector-btn--selected]="isSectorSelected(sector)"
+                        (click)="toggleSector(sector)">
+                  {{ sector }}
+                  @if (isSectorSelected(sector)) { <span class="sector-btn__check">✓</span> }
+                </button>
+              }
+            </div>
+            <p class="onboarding-hint mono">
+              {{ prefs.sectors.length > 0 ? prefs.sectors.length + ' selected' : 'Select at least one, or skip for all sectors' }}
+            </p>
+          </div>
+        }
+
+        <!-- STEP 2 : Horizon -->
+        @if (onboardingStep() === 2) {
+          <div class="onboarding-step">
+            <div class="onboarding-step__emoji">⏱</div>
+            <h2 class="onboarding-step__title display">Investment horizon</h2>
+            <p class="onboarding-step__sub">Helps us weight NCI history relevance for your analyses.</p>
+            <div class="onboarding-horizons">
+              <button class="horizon-btn"
+                      [class.horizon-btn--active]="prefs.horizon === 'SHORT'"
+                      (click)="prefs.horizon = 'SHORT'">
+                <div class="horizon-btn__icon">⚡</div>
+                <div class="horizon-btn__label">Short term</div>
+                <div class="horizon-btn__desc">1–6 months · Trend signals priority</div>
+              </button>
+              <button class="horizon-btn"
+                      [class.horizon-btn--active]="prefs.horizon === 'MEDIUM'"
+                      (click)="prefs.horizon = 'MEDIUM'">
+                <div class="horizon-btn__icon">📈</div>
+                <div class="horizon-btn__label">Medium term</div>
+                <div class="horizon-btn__desc">6–24 months · NCI stability matters</div>
+              </button>
+              <button class="horizon-btn"
+                      [class.horizon-btn--active]="prefs.horizon === 'LONG'"
+                      (click)="prefs.horizon = 'LONG'">
+                <div class="horizon-btn__icon">🏦</div>
+                <div class="horizon-btn__label">Long term</div>
+                <div class="horizon-btn__desc">2+ years · Narrative coherence first</div>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- STEP 3 : Risk Profile -->
+        @if (onboardingStep() === 3) {
+          <div class="onboarding-step">
+            <div class="onboarding-step__emoji">⚖️</div>
+            <h2 class="onboarding-step__title display">Your investor profile</h2>
+            <p class="onboarding-step__sub">Adjusts the NCI weight calculation for all your analyses.</p>
+            <div class="onboarding-profiles">
+              <button class="profile-choice"
+                      [class.profile-choice--active]="prefs.riskProfile === 'PRUDENT'"
+                      (click)="prefs.riskProfile = 'PRUDENT'">
+                <span class="profile-choice__icon">🛡</span>
+                <div>
+                  <div class="profile-choice__name">PRUDENT</div>
+                  <div class="profile-choice__desc">Capital preservation · NCI × 1.0 · Stable companies</div>
+                </div>
+                @if (prefs.riskProfile === 'PRUDENT') {
+                  <span class="profile-choice__check" style="color:var(--cyan)">✓</span>
+                }
+              </button>
+              <button class="profile-choice"
+                      [class.profile-choice--active]="prefs.riskProfile === 'SPECULATEUR'"
+                      (click)="prefs.riskProfile = 'SPECULATEUR'">
+                <span class="profile-choice__icon">⚡</span>
+                <div>
+                  <div class="profile-choice__name">SPÉCULATEUR</div>
+                  <div class="profile-choice__desc">High risk tolerance · NCI × 1.15 · Volatile companies</div>
+                </div>
+                @if (prefs.riskProfile === 'SPECULATEUR') {
+                  <span class="profile-choice__check" style="color:var(--orange)">✓</span>
+                }
+              </button>
+            </div>
+
+            <!-- Summary -->
+            <div class="onboarding-summary">
+              <div class="section-label" style="margin-bottom:8px">Your profile summary</div>
+              <div class="onboarding-summary__row">
+                <span>Sectors</span>
+                <span>{{ prefs.sectors.length > 0 ? prefs.sectors.join(', ') : 'All sectors' }}</span>
+              </div>
+              <div class="onboarding-summary__row">
+                <span>Horizon</span>
+                <span>{{ prefs.horizon }}</span>
+              </div>
+              <div class="onboarding-summary__row">
+                <span>Profile</span>
+                <span>{{ prefs.riskProfile }}</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Footer actions -->
+        <div class="onboarding-actions">
+          <button class="btn btn-ghost" (click)="skipOnboarding()">Skip for now</button>
+          <div style="display:flex;gap:8px">
+            @if (onboardingStep() > 1) {
+              <button class="btn btn-ghost" (click)="prevStep()">← Back</button>
+            }
+            @if (onboardingStep() < 3) {
+              <button class="btn btn-primary" (click)="nextStep()">Continue →</button>
+            } @else {
+              <button class="btn btn-primary" [disabled]="onboardingSaving()"
+                      (click)="finishOnboarding()">
+                @if (onboardingSaving()) {
+                  <div class="spinner"
+                       style="width:13px;height:13px;border-width:2px;border-top-color:#fff"></div>
+                }
+                 Get my recommendations
+              </button>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- ================================================================
+       VUE 2 : RECOMMENDATIONS (après onboarding)
+       ================================================================ -->
+  @if (view() === 'recommendations') {
+    <div class="discover">
+      <!-- Header -->
+      <div class="recommendations-header">
+        <div>
+          <div class="recommendations-header__badge chip chip-cyan">
+            ✨ Personalized for you
+          </div>
+          <h1 class="recommendations-header__title display">Recommended For You</h1>
+          <p class="recommendations-header__sub">
+            Based on your preferences:
+            <strong>{{ prefs.sectors.length > 0 ? prefs.sectors.join(', ') : 'All sectors' }}</strong> ·
+            <strong>{{ prefs.horizon }}</strong> horizon ·
+            <strong>{{ prefs.riskProfile }}</strong> profile
+          </p>
+        </div>
+        <button class="btn btn-ghost" (click)="goToExplore()">
+          Explore all →
+        </button>
+      </div>
+
+      @if (recommendations().length === 0) {
+        <div class="recommendations-empty">
+          <p>No companies match your preferences. Try selecting more sectors.</p>
+          <button class="btn btn-primary" (click)="view.set('onboarding')">Adjust preferences</button>
+        </div>
+      } @else {
+        <div class="company-grid">
+          @for (c of recommendations(); track c.id) {
+            <div class="company-card" (click)="openCompany(c.id)">
+              <div class="company-card__header">
+                <div class="company-card__logo">{{ c.ticker.slice(0,2) }}</div>
+                <div class="company-card__info">
+                  <div class="company-card__ticker mono">{{ c.ticker }}</div>
+                  <div class="company-card__name">{{ c.name }}</div>
+                </div>
+                <span class="nci-badge nci-{{ c.nciLabel.toLowerCase() }}">{{ nciPct(c.nciGlobal) }}</span>
+              </div>
+
+              <div class="company-card__sector" [style.color]="sectorColor(c.sector)">
+                {{ c.sector }}
+              </div>
+
+              <!-- Métriques enrichies pour les recommandations -->
+              <div class="rec-metrics">
+                <div class="rec-metric">
+                  <span class="rec-metric__label">NCI</span>
+                  <span class="rec-metric__val mono" [style.color]="nciColor(c.nciGlobal)">
+                    {{ nciPct(c.nciGlobal) }}
+                  </span>
+                </div>
+                <div class="rec-metric">
+                  <span class="rec-metric__label">Volatility</span>
+                  <span class="chip" [class]="volatilityClass(c.nciGlobal)" style="font-size:9px">
+                    {{ volatilityLabel(c.nciGlobal) }}
+                  </span>
+                </div>
+                <div class="rec-metric">
+                  <span class="rec-metric__label">Sentiment</span>
+                  @if (hasSentiment(c.sentimentAvg)) {
+                    <span class="rec-metric__val mono" [style.color]="sentimentColor(c.sentimentAvg)">
+                      {{ formatSentiment(c.sentimentAvg) }}
+                    </span>
+                    <span class="chip" [class]="sentimentClass(c.sentimentAvg)" style="font-size:9px">
+                      {{ sentimentLabel(c.sentimentAvg) }}
+                    </span>
+                  } @else {
+                    <span class="rec-metric__val" style="color:var(--text-muted);font-size:10px">—</span>
+                  }
+                </div>
+                <div class="rec-metric">
+                  <span class="rec-metric__label">Risk</span>
+                  <span class="rec-metric__val"
+                        style="font-size:10px;font-weight:600"
+                        [style.color]="nciColor(c.nciGlobal)">
+                    {{ c.riskLevel.replace('_', ' ') }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="company-card__bar-track">
+                <div class="company-card__bar-fill"
+                     [style.width.%]="c.nciGlobal * 100"
+                     [style.background]="nciColor(c.nciGlobal)"></div>
+              </div>
+
+              <div class="company-card__actions" (click)="$event.stopPropagation()">
+                <button class="btn btn-ghost btn-sm"
+                        (click)="openCompany(c.id)">View Company</button>
+                <button class="company-card__btn company-card__btn--pin"
+                        [class.company-card__btn--pinned]="isPinned(c.id)"
+                        [disabled]="isPinning(c.id) || isPinned(c.id)"
+                        (click)="pinToWatchlist(c, $event)">
+                  @if (isPinning(c.id)) {
+                    <span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                  } @else if (isPinned(c.id)) {
+                    ✓ Pinned
+                  } @else {
+                    📌 Pin
+                  }
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ================================================================
+       VUE 3 : EXPLORE (utilisateur normal)
+       ================================================================ -->
+  @if (view() === 'explore') {
+    <div class="discover">
+
+      <!-- Top bar -->
+      <div class="discover__topbar">
+        <div>
+          <h1 class="discover__title display">Discover Companies</h1>
+          <p class="discover__sub">Find and analyse companies by NCI score, sector, and sentiment</p>
+        </div>
+        <div class="discover__controls">
+          <div class="discover__search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="fp-input" type="text" placeholder="Search ticker or company…"
+                   (input)="onSearchInput($any($event.target).value)"/>
+          </div>
+          <select class="fp-select" style="width:auto;padding:7px 12px"
+                  (change)="selectedSector.set($any($event.target).value); displayedCount.set(12)">
+            @for (s of sectors(); track s) {
+              <option [value]="s">{{ s === 'ALL' ? 'All Sectors' : s }}</option>
+            }
+          </select>
+          <div class="sort-btns">
+            <button class="sort-btn" [class.sort-btn--active]="sortMode() === 'nci'"
+                    (click)="sortMode.set('nci'); displayedCount.set(12)">NCI</button>
+            <button class="sort-btn" [class.sort-btn--active]="sortMode() === 'sentiment'"
+                    (click)="sortMode.set('sentiment'); displayedCount.set(12)">Sentiment</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" routerLink="/guide">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:6px">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Guide
+          </button>
+        </div>
+      </div>
+
+      @if (loadError()) {
+        <div class="discover__alert">
+          <span>{{ loadError() }}</span>
+          <button class="btn btn-ghost btn-sm" (click)="reloadCompanies()">Réessayer</button>
+        </div>
+      }
+
+      @if (loading()) {
+        <div class="discover__loading">
+          <div class="spinner" style="width:32px;height:32px;border-width:3px"></div>
+        </div>
+      } @else {
+
+        <!-- Sections visibles seulement sans filtre -->
+        @if (!searchQuery() && selectedSector() === 'ALL') {
+
+          <!-- Top Risky -->
+          <section class="discover__section">
+            <div class="section-hdr">
+              <div class="section-hdr__left">
+                <span class="section-hdr__icon" style="color:var(--red)">⚠</span>
+                <h2 class="section-hdr__title">Top Risky Companies</h2>
+                <span class="chip chip-red">HIGH RISK</span>
+              </div>
+              <span class="section-hdr__sub">Low NCI — Narrative inconsistency</span>
+            </div>
+            <div class="company-grid">
+              @for (c of topRisky(); track c.id) {
+                <ng-container *ngTemplateOutlet="card; context: {$implicit: c}"></ng-container>
+              }
+              @if (topRisky().length === 0) {
+                <p class="section-empty">No risky companies detected ✓</p>
+              }
+            </div>
+          </section>
+
+          <!-- Most Consistent -->
+          <section class="discover__section">
+            <div class="section-hdr">
+              <div class="section-hdr__left">
+                <span class="section-hdr__icon" style="color:var(--green)">✓</span>
+                <h2 class="section-hdr__title">Most Consistent</h2>
+                <span class="chip chip-green">HIGH NCI</span>
+              </div>
+              <span class="section-hdr__sub">Stable narrative, low risk</span>
+            </div>
+            <div class="company-grid">
+              @for (c of mostConsistent(); track c.id) {
+                <ng-container *ngTemplateOutlet="card; context: {$implicit: c}"></ng-container>
+              }
+            </div>
+          </section>
+
+          <!-- Biggest NCI Jumps -->
+          <section class="discover__section">
+            <div class="section-hdr">
+              <div class="section-hdr__left">
+                <span class="section-hdr__icon" style="color:var(--amber)">⚡</span>
+                <h2 class="section-hdr__title">Biggest NCI Variation</h2>
+                <span class="chip chip-amber">VOLATILE</span>
+              </div>
+            </div>
+            <div class="company-grid">
+              @for (c of biggestJumps(); track c.id) {
+                <ng-container *ngTemplateOutlet="card; context: {$implicit: c}"></ng-container>
+              }
+            </div>
+          </section>
+
+          <!-- Top by Sector -->
+          @for (entry of bySector(); track entry[0]) {
+            <section class="discover__section">
+              <div class="section-hdr">
+                <div class="section-hdr__left">
+                  <span class="section-hdr__icon" [style.color]="sectorColor(entry[0])">◈</span>
+                  <h2 class="section-hdr__title">{{ entry[0] }}</h2>
+                  <span class="chip chip-cyan">{{ entry[1].length }} companies</span>
+                </div>
+              </div>
+              <div class="company-grid">
+                @for (c of entry[1].slice(0,6); track c.id) {
+                  <ng-container *ngTemplateOutlet="card; context: {$implicit: c}"></ng-container>
+                }
+              </div>
+            </section>
+          }
+        }
+
+        <!-- Explore All / Search results -->
+        <section class="discover__section" #exploreSection>
+          <div class="section-hdr">
+            <div class="section-hdr__left">
+              <span class="section-hdr__icon" style="color:var(--brand)">◈</span>
+              <h2 class="section-hdr__title">
+                {{ searchQuery() || selectedSector() !== 'ALL' ? 'Results' : 'Explore All' }}
+              </h2>
+              <span class="chip chip-cyan">{{ baseFiltered().length }} companies</span>
+            </div>
+          </div>
+          <div class="company-grid">
+            @for (c of filtered(); track c.id) {
+              <ng-container *ngTemplateOutlet="card; context: {$implicit: c}"></ng-container>
+            }
+            @if (filtered().length === 0) {
+              <p class="section-empty">No companies match your search.</p>
+            }
+          </div>
+          @if (hasMore()) {
+            <div class="infinite-loader">
+              <div class="spinner"></div>
+              <span>Loading more…</span>
+            </div>
+          }
+        </section>
+
+      }
+    </div>
+  }
+
+</div>
+
+<!-- ── Company card template ──────────────────────────────────── -->
+<ng-template #card let-c>
+  <div class="company-card"
+       [class.company-card--risk]="c.nciLabel === 'LOW'"
+       [class.company-card--safe]="c.nciLabel === 'HIGH'"
+       (click)="openCompany(c.id)">
+
+    <div class="company-card__header">
+      <div class="company-card__logo">{{ c.ticker.slice(0,2) }}</div>
+      <div class="company-card__info">
+        <div class="company-card__ticker mono">{{ c.ticker }}</div>
+        <div class="company-card__name">{{ c.name }}</div>
+      </div>
+      <span class="nci-badge nci-{{ c.nciLabel.toLowerCase() }}">{{ nciPct(c.nciGlobal) }}</span>
+    </div>
+
+    <div class="company-card__sector" [style.color]="sectorColor(c.sector)">{{ c.sector }}</div>
+
+    <div class="company-card__bar-track">
+      <div class="company-card__bar-fill"
+           [style.width.%]="c.nciGlobal * 100"
+           [style.background]="nciColor(c.nciGlobal)"></div>
+    </div>
+
+    <div class="company-card__meta">
+      <span class="company-card__sentiment">
+        Sentiment
+        @if (hasSentiment(c.sentimentAvg)) {
+          <strong [style.color]="sentimentColor(c.sentimentAvg)">{{ formatSentiment(c.sentimentAvg) }}</strong>
+        } @else {
+          <strong style="color:var(--text-muted)">—</strong>
+        }
+      </span>
+      <span class="chip" [class]="sentimentClass(c.sentimentAvg)">
+        @if (hasSentiment(c.sentimentAvg)) {
+          {{ sentimentLabel(c.sentimentAvg) }}
+        } @else {
+          N/A
+        }
+      </span>
+    </div>
+
+    <div class="company-card__actions" (click)="$event.stopPropagation()">
+      <button class="company-card__btn company-card__btn--pin"
+              [class.company-card__btn--pinned]="isPinned(c.id)"
+              [disabled]="isPinning(c.id) || isPinned(c.id)"
+              (click)="pinToWatchlist(c, $event)">
+        @if (isPinning(c.id)) {
+          <span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+        } @else if (isPinned(c.id)) {
+          ✓ Pinned
+        } @else {
+           Pin
+        }
+      </button>
+      <button class="company-card__btn company-card__btn--agent"
+              (click)="analyzeWithAgent(c.id, $event)">
+         Analyze
+      </button>
+    </div>
+  </div>
+</ng-template>

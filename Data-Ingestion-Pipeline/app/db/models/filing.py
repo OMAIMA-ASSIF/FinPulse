@@ -1,5 +1,5 @@
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, SmallInteger, String, Text, TIMESTAMP, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -8,8 +8,8 @@ class Filing(Base):
     __tablename__ = "filings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
-
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)   
+    company = relationship("Company")
     accession_number: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     form_type: Mapped[str] = mapped_column(String, nullable=False)
     filed_at: Mapped[Date] = mapped_column(Date, nullable=False)

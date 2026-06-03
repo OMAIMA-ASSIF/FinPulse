@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.v1.schemas import SignalHistoryPoint, SignalRow
+from app.api.v1.schemas import QualityResponse, SignalHistoryPoint, SignalRow
 from app.api.v1.endpoints.score import _build_signal_row, _get_company_or_404
 from app.db.models.filing import Filing
 from app.db.models.signal_score import SignalScore
@@ -80,3 +80,96 @@ def get_signal_history(
         )
         for signal_row, filing in rows
     ]
+
+
+@router.get(
+    "/{ticker}/quality",
+    response_model=QualityResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_signal_quality(
+    ticker: str,
+    filing_id: int = Query(..., description="ID du filing"),
+    db: Session = Depends(get_db_dependency),
+) -> QualityResponse:
+    company = _get_company_or_404(db, ticker)
+
+    filing = db.scalar(
+        select(Filing).where(
+            Filing.id == filing_id,
+            Filing.company_id == company.id,
+        )
+    )
+    if filing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Filing {filing_id} not found for ticker {ticker.upper()}",
+        )
+
+    nci_row = db.scalar(
+        select(SignalScore).where(
+            SignalScore.filing_id == filing_id,
+            SignalScore.signal_name == "nci_global",
+        )
+    )
+    if nci_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No nci_global score for filing {filing_id}",
+        )
+
+    detail = nci_row.detail if isinstance(nci_row.detail, dict) else {}
+    triplet_detail = detail.get("triplet_boost_detail")
+    nci_delta = None
+    if isinstance(triplet_detail, dict):
+        pre = triplet_detail.get("pre_boost_nci")
+        post = triplet_detail.get("post_boost_nci")
+        if pre is not None and post is not None:
+            nci_delta = abs(float(post) - float(pre))
+
+    return QualityResponse(
+        ticker=company.ticker,
+        filing_id=filing_id,
+        nci_value=float(nci_row.signal_value) if nci_row.signal_value is not None else None,
+        quality_grade=detail.get("quality_grade"),
+        score_publishable=bool(detail.get("score_publishable", False)),
+        freshness_days=detail.get("freshness_days"),
+        coverage_ratio=detail.get("coverage_ratio"),
+        nci_delta=nci_delta if nci_delta is not None else detail.get("nci_delta"),
+        confidence_avg=detail.get("confidence_avg"),
+        warnings=list(detail.get("quality_warnings") or []),
+        blocking_issues=list(detail.get("quality_blocking") or []),
+    )
+
+
+@router.get(
+    "/{ticker}/llm-explanation",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+)
+def get_llm_explanation(
+    ticker: str,
+    db: Session = Depends(get_db_dependency),
+) -> dict:
+    company = _get_company_or_404(db, ticker)
+    
+    nci_row = db.scalar(
+        select(SignalScore).where(
+            SignalScore.company_id == company.id,
+            SignalScore.signal_name == "nci_global",
+        )
+        .order_by(SignalScore.computed_at.desc())
+        .limit(1)
+    )
+    
+    if nci_row is None or nci_row.detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No nci_global signal with explanation for ticker {ticker.upper()}"
+        )
+    
+    detail = nci_row.detail if isinstance(nci_row.detail, dict) else {}
+    return {
+        "llm_explanation": detail.get("llm_explanation"),
+        "llm_explanation_meta": detail.get("llm_explanation_meta")
+    }

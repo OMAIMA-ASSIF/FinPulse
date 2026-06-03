@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Float, ForeignKey, Integer, JSON, String, Text, TIMESTAMP, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -37,6 +37,8 @@ class Embedding(Base):
 
     reconstruction_error: Mapped[float | None] = mapped_column(Float, nullable=True)
     anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    filing_section: Mapped["FilingSection"] = relationship("FilingSection", lazy="joined")
 
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),

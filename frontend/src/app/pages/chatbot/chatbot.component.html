@@ -1,0 +1,326 @@
+<div class="chat-layout">
+
+  <!-- ── LEFT PANEL ───────────────────────────────────────────────── -->
+  <aside class="chat-left">
+
+    <!-- Header -->
+    <div class="chat-left__header">
+      <div class="chat-left__brand">
+        <span class="chat-left__brand-icon">
+          <img src="assets/tete.png" alt="AI Agent logo" class="chat-left__brand-img">
+        </span>
+        <div>
+          <div class="chat-left__brand-name display">AI Agent</div>
+          <div class="chat-left__brand-sub mono">Auto-detects mode</div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" (click)="startNewChat()" title="New conversation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New
+      </button>
+    </div>
+
+    <!-- Mode pills -->
+    <div class="chat-left__modes">
+      <div class="mode-pill mode-pill--agent">
+        <span class="mode-dot mode-dot--agent"></span>
+        <div>
+          <div class="mode-pill__name">Chatbot Mode</div>
+          <div class="mode-pill__desc">Analysis, NCI queries, market data</div>
+        </div>
+      </div>
+      <div class="mode-pill mode-pill--strategy">
+        <span class="mode-dot mode-dot--strategy"></span>
+        <div>
+          <div class="mode-pill__name"> Strategy Mode</div>
+          <div class="mode-pill__desc">Triggered by "invest", "thesis", "strategy"…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat history -->
+    <div class="chat-left__section chat-history-section">
+      <div class="chat-history-header">
+        <div class="section-label" style="margin-bottom:0">Conversations</div>
+        @if (sessions().length > 0) {
+          <button class="chat-history-clear-btn" title="Delete all conversations"
+                  (click)="showClearAllConfirm.set(true)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+            </svg>
+          </button>
+        }
+      </div>
+
+      @if (sessionsLoading()) {
+        <div style="padding:12px;text-align:center"><div class="spinner" style="width:16px;height:16px"></div></div>
+      } @else if (sessions().length === 0) {
+        <div class="chat-history-empty">No conversations yet</div>
+      } @else {
+        @for (s of sessions(); track s.id) {
+          <div class="chat-session-item"
+               [class.chat-session-item--active]="activeSessionId() === s.id">
+
+            <button class="chat-session-item__btn" (click)="loadSession(s)">
+              <div class="chat-session-item__icon">
+                {{ s.contextType === 'STRATEGY' ? '⚡' : '💬' }}
+              </div>
+              <div class="chat-session-item__info">
+                <div class="chat-session-item__title">{{ s.title }}</div>
+                <div class="chat-session-item__meta mono">
+                  {{ timeAgo(s.lastMessageAt) }} · {{ s.messageCount }} messages
+                </div>
+              </div>
+            </button>
+
+            <!-- Delete button (visible on hover) -->
+            @if (deleteConfirmId() === s.id) {
+              <div class="chat-session-item__confirm">
+                <span>Delete?</span>
+                <button class="confirm-yes" [disabled]="deleting()" (click)="confirmDelete(s.id)">
+                  @if (deleting()) { <div class="spinner" style="width:10px;height:10px;border-width:1.5px"></div> }
+                  @else { Yes }
+                </button>
+                <button class="confirm-no" (click)="cancelDelete()">No</button>
+              </div>
+            } @else {
+              <button class="chat-session-item__delete"
+                      title="Delete conversation"
+                      (click)="askDelete(s.id, $event)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                </svg>
+              </button>
+            }
+
+          </div>
+        }
+      }
+    </div>
+    
+    <!-- Pinned companies -->
+    @if (pinnedCompanies().length > 0) {
+      <div class="chat-left__section">
+        <div class="section-label">Pinned Companies</div>
+        @for (c of pinnedCompanies(); track c.id) {
+          <button class="chat-pinned"
+                  (click)="sendQuick('Analyze ' + c.ticker + ' narrative consistency and investment risks')">
+            <div class="chat-pinned__logo">{{ c.ticker.slice(0,2) }}</div>
+            <div class="chat-pinned__info">
+              <span class="chat-pinned__ticker mono">{{ c.ticker }}</span>
+              <span class="chat-pinned__name">{{ c.name }}</span>
+            </div>
+            <span class="nci-badge nci-{{ c.nciLabel.toLowerCase() }}" style="font-size:10px">
+              {{ (c.nciGlobal * 100) | number:'1.0-0' }}
+            </span>
+          </button>
+        }
+      </div>
+    }
+
+  </aside>
+
+  <!-- ── MAIN PANEL ────────────────────────────────────────────────── -->
+  <div class="chat-main">
+
+    <!-- Top bar -->
+    <div class="chat-topbar">
+      <div class="chat-topbar__left">
+        <span class="live-dot" style="background:var(--brand);box-shadow:0 0 6px var(--brand)"></span>
+        <span class="mono" style="font-size:10px;color:var(--text-secondary)">ENJOY </span>
+      </div>
+      <div class="chat-topbar__right">
+        @if (messages().length > 0) {
+          <span class="mono" style="font-size:11px;color:var(--text-muted)">
+            {{ messages().length }} messages
+          </span>
+          <button class="btn btn-ghost btn-xs" (click)="clearCurrentChat()">
+            Clear view
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="chat-messages" #msgContainer>
+
+      @if (messages().length === 0) {
+        <div class="chat-welcome">
+          <div class="chat-welcome__icon">
+            <img src="assets/logo-assistant.png" alt="Robot" class="chat-welcome__icon-img">
+          </div>
+          <h2 class="chat-welcome__title display">FinPulse AI Agent</h2>
+          <p class="chat-welcome__desc">
+            Ask me anything about NCI scores, company narratives, or investment risks.
+            Describe an investment idea to automatically receive a full <strong>Strategy Report</strong>.
+          </p>
+          <div class="chat-welcome__prompts">
+            @for (q of quickPrompts.slice(0,3); track q) {
+              <button class="chat-welcome__prompt" (click)="sendQuick(q)">{{ q }}</button>
+            }
+          </div>
+        </div>
+      }
+
+      @for (msg of messages(); track msg.id) {
+        <div class="msg-row" [class.msg-row--user]="msg.role === 'user'">
+
+          @if (msg.role === 'assistant') {
+             <span class="chat-left__brand-icon">
+                <img src="assets/tete.png" alt="AI Agent logo" class="chat-left__brand-img">
+             </span>
+          }
+
+          <div class="msg-bubble"
+               [class.msg-bubble--user]="msg.role === 'user'"
+               [class.msg-bubble--ai]="msg.role === 'assistant'">
+
+            @if (msg.role === 'assistant' && !msg.loading && msg.mode) {
+              <div [class]="modeClass(msg.mode)">{{ modeLabel(msg.mode) }}</div>
+            }
+
+            @if (msg.loading) {
+              <div class="msg-typing">
+                <span></span><span></span><span></span>
+              </div>
+            } @else {
+              <div class="msg-content" [innerHTML]="formatContent(msg.content)"></div>
+
+              <!-- Strategy Card -->
+              @if (msg.strategyCard) {
+                <div class="strategy-card">
+                  <div class="strategy-card__header">
+                    <div class="strategy-card__co">
+                      <div class="strategy-card__logo">{{ msg.strategyCard.ticker.slice(0,2) }}</div>
+                      <div>
+                        <div class="strategy-card__ticker mono">{{ msg.strategyCard.ticker }}</div>
+                        <div class="strategy-card__name">{{ msg.strategyCard.companyName }}</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span [class]="recClass(msg.strategyCard.recommendation)"
+                            style="font-size:13px;padding:5px 12px;font-weight:700">
+                        {{ msg.strategyCard.recommendation }}
+                      </span>
+                      <span class="mono" style="font-size:11px;color:var(--cyan)">
+                        NCI {{ (msg.strategyCard.nciPersonalized * 100) | number:'1.0-0' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="strategy-card__block strategy-card__block--thesis">
+                    <div class="strategy-card__block-title">📝 Thesis</div>
+                    <p class="strategy-card__block-text">{{ msg.strategyCard.thesis }}</p>
+                  </div>
+
+                  <div class="strategy-card__body">
+                    @if (msg.strategyCard.bullCase.length > 0) {
+                      <div class="strategy-card__block">
+                        <div class="strategy-card__block-title" style="color:var(--green)">✅ Bull Case</div>
+                        @for (item of msg.strategyCard.bullCase; track item) {
+                          <div class="strategy-card__item strategy-card__item--bull">{{ item }}</div>
+                        }
+                      </div>
+                    }
+                    @if (msg.strategyCard.risks.length > 0) {
+                      <div class="strategy-card__block">
+                        <div class="strategy-card__block-title" style="color:var(--red)">🔴 Risks</div>
+                        @for (item of msg.strategyCard.risks; track item) {
+                          <div class="strategy-card__item strategy-card__item--risk">{{ item }}</div>
+                        }
+                      </div>
+                    }
+                    @if (msg.strategyCard.contradictions.length > 0) {
+                      <div class="strategy-card__block">
+                        <div class="strategy-card__block-title" style="color:var(--orange)">⚠ SEC Contradictions</div>
+                        @for (item of msg.strategyCard.contradictions; track item) {
+                          <div class="strategy-card__item strategy-card__item--warn">{{ item }}</div>
+                        }
+                      </div>
+                    }
+                  </div>
+
+                  @if (msg.strategyCard.historicalInsight) {
+                    <div class="strategy-card__insight">
+                      <span class="mono" style="font-size:10px;color:var(--text-muted)">📈 Historical</span>
+                      <span style="font-size:12px;color:var(--text-secondary)">{{ msg.strategyCard.historicalInsight }}</span>
+                    </div>
+                  }
+
+                  <div class="strategy-card__actions">
+                    @if (!isSaved(msg.id)) {
+                      <button class="btn btn-success btn-sm" (click)="saveStrategy(msg)">
+                        💾 Save Strategy → Watchlist
+                      </button>
+                    } @else {
+                      <span class="strategy-card__saved">✅ Strategy saved</span>
+                    }
+                    <button class="btn btn-ghost btn-sm" (click)="downloadPdf(msg)">📥 Download</button>
+                    <button class="btn btn-ghost btn-sm" (click)="cancelStrategy(msg)">✕ Dismiss</button>
+                  </div>
+                </div>
+              }
+
+              <div class="msg-time mono">{{ msg.timestamp | date:'HH:mm' }}</div>
+            }
+          </div>
+
+          @if (msg.role === 'user') {
+            <div class="msg-avatar msg-avatar--user">{{ auth.initials() }}</div>
+          }
+        </div>
+      }
+
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input-area">
+      <div class="chat-input-wrap" [class.chat-input-wrap--loading]="isLoading()">
+        <textarea #textarea class="chat-textarea" rows="1"
+                  [value]="inputText()"
+                  (input)="inputText.set($any($event.target).value); autoResize()"
+                  (keydown)="onEnter($event)"
+                  [disabled]="isLoading()"
+                  placeholder="Ask about NCI, risks, narratives… or describe an investment thesis for a Strategy Report">
+        </textarea>
+        <div class="chat-input-footer">
+          <span class="mono" style="font-size:10px;color:var(--text-muted)">
+            Enter to send · Shift+Enter for new line · Auto-detects Agent vs Strategy
+          </span>
+          <button class="chat-send-btn"
+                  [disabled]="!inputText().trim() || isLoading()"
+                  (click)="send()">
+            @if (isLoading()) {
+              <div class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff"></div>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Clear All Confirm modal ──────────────────────────────────── -->
+  @if (showClearAllConfirm()) {
+    <div class="chat-modal-overlay" (click)="showClearAllConfirm.set(false)">
+      <div class="chat-modal" (click)="$event.stopPropagation()">
+        <h3>Delete all conversations?</h3>
+        <p>This permanently removes all your chat history. This cannot be undone.</p>
+        <div class="chat-modal__actions">
+          <button class="btn btn-ghost" (click)="showClearAllConfirm.set(false)">Cancel</button>
+          <button class="btn btn-danger" (click)="confirmClearAll()">Yes, delete all</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>

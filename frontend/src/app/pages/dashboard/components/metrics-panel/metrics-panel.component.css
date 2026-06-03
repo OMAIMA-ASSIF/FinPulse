@@ -1,0 +1,68 @@
+.metrics { padding: 16px 18px; }
+.metrics__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.metric-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--r-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s;
+}
+.metric-card:hover { border-color: var(--border-base); }
+.metric-card--personalized { border-color: rgba(59,130,246,0.25); background: var(--brand-dim); }
+
+.metric-card__label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.metric-card__value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.metric-card__bar {
+  height: 3px;
+  background: var(--border-base);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.metric-card__bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+.metric-card__tag {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.metric-card__personalized-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: 0.07em;
+}
+.metric-card__risk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  margin-top: 4px;
+}
+.metric-card__risk svg { width: 18px; height: 18px; }

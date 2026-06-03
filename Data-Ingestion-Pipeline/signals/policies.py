@@ -123,3 +123,30 @@ NCI_CRITICAL_LAYER_SIGNALS = {
     ),
     "behavior": ("insider_signal",),
 }
+# Boost appliqué au NCI global : uniquement CONVERGENCE_TRIPLET (triplet_convergence_signal).
+# CONVERGENCE_TIERS / convergence_signal = indicateur multi-couches (diagnostic, non ajouté au NCI).
+CONVERGENCE_TRIPLET = {
+    "rlds_threshold": 0.25,
+    "forward_pessimism_threshold": 0.25,
+    "ita_threshold": 0.15,
+    "boost_full": 0.25,       # 3/3 signaux
+    "boost_strong": 0.15,     # 2/3 signaux
+    "boost_weak": 0.0,        # 1/3 signaux
+    "min_confidence_for_boost": 0.4,
+}
+
+# ── Fenêtre temporelle pour la convergence triplet ──
+# Les 3 signaux (RLDS, GCE, ITA) doivent avoir été calculés
+# dans un intervalle ≤ 72h pour activer le boost.
+CONVERGENCE_TEMPORAL_WINDOW_HOURS = 72
+
+# ── Mapping explicite des sources des 3 signaux ──
+# RLDS  → text_signals (Risk Lexical Drift Score)
+# GCE   → forward_pessimism (Guidance Confidence Erosion)
+# ITA   → behavior_signals (Insider Transaction Asymmetry)
+TRIPLET_SIGNAL_SOURCES = {
+    "rlds": {"source_module": "text_signals", "description": "Risk Lexical Drift Score"},
+    "gce": {"source_module": "text_signals", "signal_name": "forward_pessimism", "description": "Guidance Confidence Erosion"},
+    "ita": {"source_module": "behavior_signals", "signal_name": "insider_signal", "description": "Insider Transaction Asymmetry"},
+}
+

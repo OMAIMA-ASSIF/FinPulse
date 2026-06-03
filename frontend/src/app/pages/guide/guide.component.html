@@ -1,0 +1,21 @@
+<div class="guide-page">
+  <div class="guide-header">
+    <h1 class="display guide-title">Guide des Termes FinPulse</h1>
+    <p class="guide-sub">Comprendre les indicateurs et métriques utilisés dans la plateforme</p>
+  </div>
+
+  <div class="guide-content">
+    @for (item of terms; track item.term) {
+      <div class="guide-term-card">
+        <h3 class="guide-term">{{ item.term }}</h3>
+        <p class="guide-definition">{{ item.definition }}</p>
+        @if (item.formula) {
+          <div class="guide-formula">
+            <span class="guide-formula-label">Formule:</span>
+            <span class="guide-formula-text">{{ item.formula }}</span>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

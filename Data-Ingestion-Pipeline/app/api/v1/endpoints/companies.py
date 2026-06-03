@@ -30,6 +30,7 @@ def get_companies(
     ).all()
     return [
         CompanyIdentity(
+            id=row.id,
             name=row.name,
             ticker=row.ticker,
             cik=row.cik,
@@ -37,6 +38,27 @@ def get_companies(
         )
         for row in rows
     ]
+
+
+@router.get(
+    "/{ticker}",
+    response_model=CompanyIdentity,
+    status_code=status.HTTP_200_OK,
+)
+def get_company_by_ticker(
+    ticker: str,
+    db: Session = Depends(get_db_dependency),
+) -> CompanyIdentity:
+    from app.api.v1.endpoints.score import _get_company_or_404
+
+    company = _get_company_or_404(db, ticker)
+    return CompanyIdentity(
+        id=company.id,
+        name=company.name,
+        ticker=company.ticker,
+        cik=company.cik,
+        is_active=company.is_active,
+    )
 
 
 @router.get(

@@ -1,0 +1,173 @@
+<div class="notif-page">
+  <div class="notif-header">
+    <div>
+      <h1 class="display notif-page__title">Notifications</h1>
+      <p class="notif-page__sub">{{ watchlistUnreadCount() }} unread watchlist alerts</p>
+    </div>
+    @if (watchlistUnreadCount() > 0) {
+      <button class="btn btn-ghost" (click)="markAllRead()">✓ Mark all read</button>
+    }
+  </div>
+
+  <div class="notif-tabs">
+    <button class="notif-tab" [class.notif-tab--active]="activeTab()==='all'"
+            (click)="activeTab.set('all')">
+      All <span class="notif-tab__count">{{ watchlistAlertCount() }}</span>
+    </button>
+    <button class="notif-tab" [class.notif-tab--active]="activeTab()==='unread'"
+            (click)="activeTab.set('unread')">
+      Unread
+      @if (watchlistUnreadCount() > 0) {
+        <span class="unread-badge" style="margin-left:4px">{{ watchlistUnreadCount() }}</span>
+      }
+    </button>
+    <button class="notif-tab" [class.notif-tab--active]="activeTab()==='anomalies'"
+            (click)="activeTab.set('anomalies')">
+      Anomalies
+    </button>
+  </div>
+
+  @if (activeTab() === 'anomalies') {
+    <div class="notif-anomalies-tab">
+      <div class="notif-anomalies-selector">
+        <label style="font-size:13px;color:var(--text-secondary);margin-right:8px">Select company:</label>
+        <select class="btn btn-ghost btn-xs" (change)="selectCompanyForAnomalies($any($event.target).value)">
+          <option value="">-- Select --</option>
+          @for (company of watchlistCompanies(); track company.id) {
+            <option [value]="company.id" [selected]="selectedCompanyForAnomalies()?.id === company.id">
+              {{ company.ticker }} - {{ company.name }}
+            </option>
+          }
+        </select>
+      </div>
+
+      @if (loadingAnomalies()) {
+        <div class="notif-loading"><div class="spinner"></div></div>
+      } @else if (!selectedCompanyForAnomalies()) {
+        <div class="notif-empty">
+          <h3>Select a company to view anomalies</h3>
+          <p>Anomalies detect the most abnormal risk sections in company filings.</p>
+        </div>
+      } @else if (anomalies().length === 0) {
+        <div class="notif-empty">
+          <h3>No anomalies found</h3>
+          <p>No abnormal risk sections detected for {{ selectedCompanyForAnomalies()!.ticker }}.</p>
+        </div>
+      }@else {
+  <div class="notif-list">
+    @for (anomaly of paginatedAnomalies(); track $index) {
+      <div class="notif-card">
+        <div class="notif-card__body">
+          <div class="notif-card__top">
+            <span class="notif-card__company mono">{{ selectedCompanyForAnomalies()!.ticker }}</span>
+            <span class="chip chip-red">Anomaly Score: {{ anomaly.anomaly_score.toFixed(2) }}</span>
+          </div>
+          @if (anomaly.section) {
+            <div style="margin-bottom:8px">
+              <span class="chip chip-amber mono">{{ anomaly.section }}</span>
+              <span style="font-size:11px;color:var(--text-muted);margin-left:8px">
+                Sector threshold: {{ anomaly.sector_threshold.toFixed(2) }}
+              </span>
+            </div>
+          }
+          <p class="notif-card__msg">{{ anomaly.text }}</p>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="pagination">
+      <button class="btn btn-ghost btn-sm"
+              (click)="goToPage(currentPage() - 1)"
+              [disabled]="currentPage() === 1">
+        ← Previous
+      </button>
+
+      @for (page of [].constructor(totalPages()); track $index) {
+        <button class="pagination__page"
+                [class.pagination__page--active]="currentPage() === $index + 1"
+                (click)="goToPage($index + 1)">
+          {{ $index + 1 }}
+        </button>
+      }
+
+      <button class="btn btn-ghost btn-sm"
+              (click)="goToPage(currentPage() + 1)"
+              [disabled]="currentPage() === totalPages()">
+        Next →
+      </button>
+    </div>
+  }
+}
+    </div>
+  } @else if (isPageLoading()) {
+    <div class="notif-loading"><div class="spinner"></div></div>
+  } @else if (watchlistCompanies().length === 0) {
+    <div class="notif-empty">
+      <h3>No companies in your watchlist</h3>
+      <p>Pin companies from Discover to see their alerts here.</p>
+    </div>
+  } @else if (feedRows().length === 0) {
+    <div class="notif-empty">
+      <h3>{{ activeTab() === 'unread' ? "You're all caught up!" : 'No alerts yet' }}</h3>
+      <p>{{ activeTab() === 'unread'
+        ? 'No unread alerts for your watchlist companies.'
+        : 'No alerts for your watchlist companies yet.' }}</p>
+    </div>
+  } @else {
+    <div class="wl-panel wl-panel--alerts" style="height: auto; border: none; padding: 0;">
+      <div class="wl-panel-body" style="padding: 0;">
+        @for (row of feedRows(); track row.kind === 'ai' ? 'ai-' + row.company.id : 'alert-' + row.alert!.id) {
+          @if (row.kind === 'ai') {
+            <div class="wl-alert-item">
+              <span class="chat-left__brand-icon">
+                <img src="assets/tete.png" alt="AI Agent logo" class="chat-left__brand-img">
+             </span>
+              <div class="wl-alert-body">
+                <div class="wl-alert-top">
+                  <span class="mono wl-alert-company">{{ row.company.ticker }}</span>
+                  <span class="wl-alert-company-name">{{ row.company.name }}</span>
+                  <span class="chip chip-amber">RISK ANALYSIS</span>
+                </div>
+                <p class="wl-alert-msg">{{ row.risk!.llm_explanation }}</p>
+                @if (row.risk!.llm_explanation_meta?.recommended_actions?.length) {
+                  <div style="margin-top:8px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Recommended Actions:</div>
+                    @for (action of row.risk!.llm_explanation_meta!.recommended_actions; track action) {
+                      <div style="font-size:11px;color:var(--text-secondary);margin-left:4px">• {{ action }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          } @else {
+            <div class="wl-alert-item" [class.wl-alert-item--unread]="!row.alert!.isRead">
+              <div class="wl-alert-icon">{{ alertIcon(row.alert!.alertType) }}</div>
+              <div class="wl-alert-body">
+                <div class="wl-alert-top">
+                  <span class="mono wl-alert-company">{{ row.company.ticker }}</span>
+                  <span class="wl-alert-company-name">{{ row.company.name }}</span>
+                  <span [class]="alertChipClass(row.alert!.alertType)">{{ formatAlertType(row.alert!.alertType) }}</span>
+                  @if (!row.alert!.isRead) {
+                    <span class="wl-alert-dot"></span>
+                  }
+                </div>
+                <p class="wl-alert-msg">{{ row.alert!.message }}</p>
+                <div class="wl-alert-footer">
+                  <span class="mono" style="font-size:10px; color:var(--text-muted);">
+                    {{ row.alert!.createdAt | date:'MMM d, HH:mm' }}
+                  </span>
+                  @if (!row.alert!.isRead) {
+                    <button class="btn btn-ghost btn-xs" (click)="markRead(row.alert!)">Read</button>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

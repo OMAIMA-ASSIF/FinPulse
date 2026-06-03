@@ -1,0 +1,42 @@
+# Dépendances
+/node_modules
+
+# Dossiers de build / compilation
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Fichiers générés par Angular
+/.angular
+
+# Fichiers de cache et logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Fichiers d’environnement (si tu exclus tes configs perso)
+/src/environments/environment*.ts
+!src/environments/environment.ts      # garder le template si besoin
+
+# IDE / éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Système
+Thumbs.db
+
+# Tests / couverture
+/coverage
+/coverage-cypress
+/.nyc_output
+
+# Fichiers de dépendances (lock files optionnels, selon tes préférences)
+# package-lock.json  # décommente si tu veux l'exclure
+# yarn.lock
